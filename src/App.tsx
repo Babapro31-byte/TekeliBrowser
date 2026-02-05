@@ -14,12 +14,14 @@ export interface Tab {
   isLoading: boolean;
 }
 
+const NEWTAB_URL = 'tekeli://newtab';
+
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: '1',
       title: 'Yeni Sekme',
-      url: 'https://duckduckgo.com',
+      url: NEWTAB_URL,
       isLoading: false
     }
   ]);
@@ -35,7 +37,7 @@ function App() {
     const newTab: Tab = {
       id: Date.now().toString(),
       title: 'Yeni Sekme',
-      url: 'https://duckduckgo.com',
+      url: NEWTAB_URL,
       isLoading: false
     };
     setTabs([...tabs, newTab]);
@@ -48,7 +50,7 @@ function App() {
       const defaultTab: Tab = {
         id: Date.now().toString(),
         title: 'Yeni Sekme',
-        url: 'https://duckduckgo.com',
+        url: NEWTAB_URL,
         isLoading: false
       };
       setTabs([defaultTab]);
@@ -130,6 +132,7 @@ function App() {
               <WebViewContainer 
                 tab={activeTab}
                 onTitleUpdate={(title) => updateTabTitle(activeTab.id, title)}
+                onNavigate={(url) => updateTabUrl(activeTab.id, url)}
               />
             )}
           </motion.div>
@@ -146,6 +149,7 @@ function App() {
                 <WebViewContainer 
                   tab={secondaryTab}
                   onTitleUpdate={(title) => updateTabTitle(secondaryTab.id, title)}
+                  onNavigate={(url) => updateTabUrl(secondaryTab.id, url)}
                 />
               </motion.div>
             )}

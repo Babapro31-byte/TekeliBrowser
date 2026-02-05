@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initAdBlocker, setPrivacyUserAgent, getBlockStats } from './adBlocker.js';
+import { initAdBlocker, setPrivacyUserAgent, getBlockStats, forceUpdateFilters, getFilterManager } from './adBlocker.js';
+import { generateYouTubeAdBlockerScript } from './youtubeAdBlocker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +17,7 @@ app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-accelerated-video-decode');
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -59,25 +61,54 @@ function createWindow() {
   });
 }
 
-function initializeWebviewSession() {
+async function initializeWebviewSession() {
   const webviewSession = session.fromPartition('persist:browser');
   
-  // Initialize ad blocker
-  initAdBlocker(webviewSession);
+  // Initialize ad blocker (now async)
+  await initAdBlocker(webviewSession);
   setPrivacyUserAgent(webviewSession);
   
-  // Set preload
+  // Set preload script
   webviewSession.setPreloads([path.join(__dirname, 'webviewPreload.cjs')]);
   
-  // Permissions
-  webviewSession.setPermissionRequestHandler((_, permission, callback) => {
-    callback(['media', 'mediaKeySystem', 'fullscreen'].includes(permission));
+  // Inject YouTube ad blocker script into YouTube pages
+  webviewSession.webRequest.onCompleted({ urls: ['*://*.youtube.com/*'] }, (details) => {
+    if (details.resourceType === 'mainFrame' && mainWindow) {
+      // Inject advanced ad blocker script
+      const filterManager = getFilterManager();
+      const filters = filterManager.getFilters();
+      const script = generateYouTubeAdBlockerScript(filters);
+      
+      // Send to renderer to inject into webview
+      mainWindow.webContents.send('inject-adblock-script', {
+        tabUrl: details.url,
+        script: script
+      });
+    }
   });
   
-  console.log('[TekeliBrowser] Session initialized');
+  // Block WebRTC IP leak (privacy)
+  webviewSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const allowedPermissions = ['media', 'mediaKeySystem', 'fullscreen', 'pointerLock'];
+    
+    if (allowedPermissions.includes(permission)) {
+      callback(true);
+    } else {
+      console.log('[TekeliBrowser] Blocked permission:', permission);
+      callback(false);
+    }
+  });
+  
+  // Handle permission check
+  webviewSession.setPermissionCheckHandler((webContents, permission) => {
+    const allowedPermissions = ['media', 'mediaKeySystem', 'fullscreen', 'pointerLock'];
+    return allowedPermissions.includes(permission);
+  });
+  
+  console.log('[TekeliBrowser] Session initialized with YouTube AdBlocker v1.1');
 }
 
-// IPC Handlers
+// IPC Handlers - Window Controls
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -85,21 +116,76 @@ ipcMain.on('window-maximize', () => {
 });
 ipcMain.on('window-close', () => mainWindow?.close());
 
+// IPC Handlers - Tab Management
 ipcMain.handle('tab-create', async (_, url) => ({ success: true, url }));
 ipcMain.handle('tab-navigate', async (_, tabId, url) => ({ success: true, tabId, url }));
 ipcMain.handle('tab-close', async (_, tabId) => ({ success: true, tabId }));
-ipcMain.handle('get-adblock-stats', async () => getBlockStats());
+
+// IPC Handlers - Ad Blocker
+ipcMain.handle('get-adblock-stats', async () => {
+  const stats = getBlockStats();
+  return stats;
+});
+
+ipcMain.handle('update-adblock-filters', async () => {
+  try {
+    const result = await forceUpdateFilters();
+    return { 
+      success: result.success, 
+      version: result.version,
+      message: result.success ? 'Filters updated successfully' : 'Filters are already up to date'
+    };
+  } catch (error: any) {
+    return { 
+      success: false, 
+      version: getFilterManager().getVersion(),
+      message: error.message || 'Update failed'
+    };
+  }
+});
+
+ipcMain.handle('get-filter-info', async () => {
+  const filterManager = getFilterManager();
+  return filterManager.getStats();
+});
+
+// IPC Handler - Inject script into specific webview
+ipcMain.on('request-adblock-script', (event) => {
+  const filterManager = getFilterManager();
+  const filters = filterManager.getFilters();
+  const script = generateYouTubeAdBlockerScript(filters);
+  event.reply('adblock-script', script);
+});
 
 // App lifecycle
-app.whenReady().then(() => {
-  initializeWebviewSession();
+app.whenReady().then(async () => {
+  // Initialize webview session with ad blocker (async)
+  await initializeWebviewSession();
+  
+  // Create main window
   createWindow();
   
+  // Handle macOS activate
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
   });
+  
+  console.log('[TekeliBrowser] v1.1 started successfully');
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+// Handle uncaught exceptions gracefully
+process.on('uncaughtException', (error) => {
+  console.error('[TekeliBrowser] Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[TekeliBrowser] Unhandled rejection:', reason);
 });

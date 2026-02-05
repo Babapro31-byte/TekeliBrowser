@@ -1,16 +1,28 @@
-import { useEffect, useRef, memo } from 'react';
+import { useEffect, useRef, memo, useCallback } from 'react';
 import type { Tab } from '../App';
+import NewTabPage from './NewTabPage';
+
+const NEWTAB_URL = 'tekeli://newtab';
 
 interface WebViewContainerProps {
   tab: Tab;
   onTitleUpdate: (title: string) => void;
+  onNavigate?: (url: string) => void;
 }
 
 // Memoized component to prevent unnecessary re-renders
-const WebViewContainer = memo(({ tab, onTitleUpdate }: WebViewContainerProps) => {
+const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContainerProps) => {
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
   const isReadyRef = useRef(false);
   const lastTitleRef = useRef('');
+  
+  const isNewTabPage = tab.url === NEWTAB_URL;
+  
+  const handleNewTabNavigate = useCallback((url: string) => {
+    if (onNavigate) {
+      onNavigate(url);
+    }
+  }, [onNavigate]);
 
   useEffect(() => {
     const webview = webviewRef.current;
@@ -53,6 +65,16 @@ const WebViewContainer = memo(({ tab, onTitleUpdate }: WebViewContainerProps) =>
     };
   }, [tab.id, onTitleUpdate]);
 
+  // Show custom new tab page
+  if (isNewTabPage) {
+    return (
+      <div className="w-full h-full">
+        <NewTabPage onNavigate={handleNewTabNavigate} />
+      </div>
+    );
+  }
+
+  // Show webview for regular URLs
   return (
     <div className="w-full h-full bg-dark-bg">
       <webview

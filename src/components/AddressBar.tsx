@@ -1,4 +1,5 @@
-import { useState, KeyboardEvent, useEffect } from 'react';
+import { useState, KeyboardEvent, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface AddressBarProps {
@@ -12,6 +13,12 @@ interface AddressBarProps {
   onToggleSidebar: () => void;
 }
 
+// Hide internal URLs from display
+const getDisplayUrl = (url: string) => {
+  if (url.startsWith('tekeli://')) return '';
+  return url;
+};
+
 const AddressBar = ({ 
   currentUrl, 
   onNavigate, 
@@ -22,17 +29,45 @@ const AddressBar = ({
   splitViewActive,
   onToggleSidebar
 }: AddressBarProps) => {
-  const [inputValue, setInputValue] = useState(currentUrl);
+  const [inputValue, setInputValue] = useState(getDisplayUrl(currentUrl));
   const [isFocused, setIsFocused] = useState(false);
   const [blockedAds, setBlockedAds] = useState(0);
   const [showShieldPopup, setShowShieldPopup] = useState(false);
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+  const shieldButtonRef = useRef<HTMLButtonElement>(null);
 
   // Sync input with currentUrl when not focused
   useEffect(() => {
     if (!isFocused) {
-      setInputValue(currentUrl);
+      setInputValue(getDisplayUrl(currentUrl));
     }
   }, [currentUrl, isFocused]);
+
+  // Update popup position when showing
+  useEffect(() => {
+    if (showShieldPopup && shieldButtonRef.current) {
+      const rect = shieldButtonRef.current.getBoundingClientRect();
+      setPopupPosition({
+        top: rect.bottom + 8,
+        left: rect.left
+      });
+    }
+  }, [showShieldPopup]);
+
+  // Close popup on outside click
+  useEffect(() => {
+    if (!showShieldPopup) return;
+    
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-shield-popup]') && !target.closest('[data-shield-button]')) {
+        setShowShieldPopup(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showShieldPopup]);
 
   // Fetch ad block stats (less frequently for performance)
   useEffect(() => {
@@ -60,14 +95,16 @@ const AddressBar = ({
     if (e.key === 'Enter') {
       let url = inputValue.trim();
       
+      if (!url) return;
+      
       // Add protocol if missing
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         // Check if it looks like a URL
         if (url.includes('.') && !url.includes(' ')) {
           url = 'https://' + url;
         } else {
-          // Treat as search query
-          url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+          // Use DuckDuckGo for search
+          url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
         }
       }
       
@@ -102,92 +139,97 @@ const AddressBar = ({
       </div>
       
       {/* Shield Button - Ad Blocker Status */}
-      <div className="relative">
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowShieldPopup(!showShieldPopup)}
-          title="Reklam Engelleyici"
-          className="w-9 h-9 rounded-lg glass flex items-center justify-center transition-all relative
-                     text-emerald-400 hover:text-emerald-300 neon-glow-green"
-          style={{
-            boxShadow: blockedAds > 0 
-              ? '0 0 10px rgba(52, 211, 153, 0.4), 0 0 20px rgba(52, 211, 153, 0.2)' 
-              : 'none'
-          }}
-        >
-          {/* Shield Icon */}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-          </svg>
-          
-          {/* Blocked count badge */}
-          {blockedAds > 0 && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-emerald-500 to-teal-500 
-                         rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg"
-            >
-              {blockedAds > 99 ? '99+' : blockedAds}
-            </motion.div>
-          )}
-        </motion.button>
+      <motion.button
+        ref={shieldButtonRef}
+        data-shield-button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setShowShieldPopup(!showShieldPopup)}
+        title="Reklam Engelleyici"
+        className="w-9 h-9 rounded-lg glass flex items-center justify-center transition-all relative
+                   text-emerald-400 hover:text-emerald-300 neon-glow-green"
+        style={{
+          boxShadow: blockedAds > 0 
+            ? '0 0 10px rgba(52, 211, 153, 0.4), 0 0 20px rgba(52, 211, 153, 0.2)' 
+            : 'none'
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+        </svg>
+        
+        {blockedAds > 0 && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-emerald-500 to-teal-500 
+                       rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg"
+          >
+            {blockedAds > 99 ? '99+' : blockedAds}
+          </motion.div>
+        )}
+      </motion.button>
 
-        {/* Shield Popup */}
+      {/* Shield Popup - rendered via Portal */}
+      {showShieldPopup && createPortal(
         <AnimatePresence>
-          {showShieldPopup && (
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.9 }}
-              className="absolute top-12 left-0 w-64 glass rounded-xl border border-emerald-500/20 p-4 z-50"
-              style={{ boxShadow: '0 0 30px rgba(52, 211, 153, 0.2)' }}
-            >
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 
-                               flex items-center justify-center">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-white font-semibold">Koruma Aktif</h3>
-                  <p className="text-emerald-400 text-xs">Brave seviyesi engelleme</p>
-                </div>
+          <motion.div
+            data-shield-popup
+            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.9 }}
+            className="fixed w-64 glass rounded-xl border border-emerald-500/20 p-4"
+            style={{ 
+              top: popupPosition.top,
+              left: popupPosition.left,
+              zIndex: 99999,
+              boxShadow: '0 0 30px rgba(52, 211, 153, 0.2)' 
+            }}
+          >
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 
+                             flex items-center justify-center">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                </svg>
               </div>
-              
-              <div className="bg-dark-bg/50 rounded-lg p-3 mb-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-white/70 text-sm">Engellenen Reklamlar</span>
-                  <span className="text-emerald-400 font-bold text-lg">{blockedAds}</span>
-                </div>
+              <div>
+                <h3 className="text-white font-semibold">Koruma Aktif</h3>
+                <p className="text-emerald-400 text-xs">Brave seviyesi engelleme</p>
               </div>
-              
-              <div className="space-y-2 text-xs text-white/60">
-                <div className="flex items-center space-x-2">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
-                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                  </svg>
-                  <span>YouTube Reklam Atlama</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
-                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                  </svg>
-                  <span>İzleyici/Tracker Engelleme</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
-                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                  </svg>
-                  <span>Gizlilik Koruması</span>
-                </div>
+            </div>
+            
+            <div className="bg-dark-bg/50 rounded-lg p-3 mb-3">
+              <div className="flex justify-between items-center">
+                <span className="text-white/70 text-sm">Engellenen Reklamlar</span>
+                <span className="text-emerald-400 font-bold text-lg">{blockedAds}</span>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+            </div>
+            
+            <div className="space-y-2 text-xs text-white/60">
+              <div className="flex items-center space-x-2">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
+                  <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
+                </svg>
+                <span>YouTube Reklam Atlama</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
+                  <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
+                </svg>
+                <span>İzleyici/Tracker Engelleme</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
+                  <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
+                </svg>
+                <span>Gizlilik Koruması</span>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
       
       {/* Address Input (Omnibox) */}
       <motion.div 
