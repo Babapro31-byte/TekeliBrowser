@@ -90,8 +90,5 @@ MIT
 
 ## 👨‍💻 Geliştirici
 
-TekeliBrowser Ekibi
+Cursor AI 
 
----
-
-**Not**: Bu proje aktif geliştirme aşamasındadır. AI Asistan özelliği yakında eklenecektir.
