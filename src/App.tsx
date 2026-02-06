@@ -6,6 +6,7 @@ import AddressBar from './components/AddressBar';
 import BookmarksBar from './components/BookmarksBar';
 import WebViewContainer from './components/WebViewContainer';
 import AISidebar from './components/AISidebar';
+import UpdateNotification from './components/UpdateNotification';
 
 export interface Tab {
   id: string;
@@ -14,14 +15,15 @@ export interface Tab {
   isLoading: boolean;
 }
 
-const NEWTAB_URL = 'tekeli://newtab';
+// Default URL for new tabs
+const DEFAULT_URL = 'tekeli://newtab';
 
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: '1',
       title: 'Yeni Sekme',
-      url: NEWTAB_URL,
+      url: DEFAULT_URL,
       isLoading: false
     }
   ]);
@@ -37,7 +39,7 @@ function App() {
     const newTab: Tab = {
       id: Date.now().toString(),
       title: 'Yeni Sekme',
-      url: NEWTAB_URL,
+      url: DEFAULT_URL,
       isLoading: false
     };
     setTabs([...tabs, newTab]);
@@ -50,7 +52,7 @@ function App() {
       const defaultTab: Tab = {
         id: Date.now().toString(),
         title: 'Yeni Sekme',
-        url: NEWTAB_URL,
+        url: DEFAULT_URL,
         isLoading: false
       };
       setTabs([defaultTab]);
@@ -99,6 +101,9 @@ function App() {
 
   return (
     <div className="w-full h-screen bg-dark-bg flex flex-col overflow-hidden">
+      {/* Auto-updater notification */}
+      <UpdateNotification />
+      
       <Titlebar />
       
       <TabBar 

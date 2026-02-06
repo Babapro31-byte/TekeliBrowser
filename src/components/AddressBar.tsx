@@ -13,9 +13,12 @@ interface AddressBarProps {
   onToggleSidebar: () => void;
 }
 
-// Hide internal URLs from display
+// Check if URL is an internal URL
+const isInternalUrl = (url: string) => url.startsWith('tekeli://');
+
+// Get display value for URL (hide internal URLs)
 const getDisplayUrl = (url: string) => {
-  if (url.startsWith('tekeli://')) return '';
+  if (isInternalUrl(url)) return '';
   return url;
 };
 
@@ -33,8 +36,35 @@ const AddressBar = ({
   const [isFocused, setIsFocused] = useState(false);
   const [blockedAds, setBlockedAds] = useState(0);
   const [showShieldPopup, setShowShieldPopup] = useState(false);
-  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
   const shieldButtonRef = useRef<HTMLButtonElement>(null);
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+
+  // Update popup position when opening
+  const handleShieldClick = () => {
+    if (!showShieldPopup && shieldButtonRef.current) {
+      const rect = shieldButtonRef.current.getBoundingClientRect();
+      setPopupPosition({
+        top: rect.bottom + 8,
+        left: rect.left
+      });
+    }
+    setShowShieldPopup(!showShieldPopup);
+  };
+
+  // Close popup when clicking outside
+  useEffect(() => {
+    if (!showShieldPopup) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.shield-popup') && !target.closest('.shield-button')) {
+        setShowShieldPopup(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showShieldPopup]);
 
   // Sync input with currentUrl when not focused
   useEffect(() => {
@@ -42,32 +72,6 @@ const AddressBar = ({
       setInputValue(getDisplayUrl(currentUrl));
     }
   }, [currentUrl, isFocused]);
-
-  // Update popup position when showing
-  useEffect(() => {
-    if (showShieldPopup && shieldButtonRef.current) {
-      const rect = shieldButtonRef.current.getBoundingClientRect();
-      setPopupPosition({
-        top: rect.bottom + 8,
-        left: rect.left
-      });
-    }
-  }, [showShieldPopup]);
-
-  // Close popup on outside click
-  useEffect(() => {
-    if (!showShieldPopup) return;
-    
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-shield-popup]') && !target.closest('[data-shield-button]')) {
-        setShowShieldPopup(false);
-      }
-    };
-    
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [showShieldPopup]);
 
   // Fetch ad block stats (less frequently for performance)
   useEffect(() => {
@@ -95,6 +99,7 @@ const AddressBar = ({
     if (e.key === 'Enter') {
       let url = inputValue.trim();
       
+      // Empty input - do nothing
       if (!url) return;
       
       // Add protocol if missing
@@ -103,7 +108,7 @@ const AddressBar = ({
         if (url.includes('.') && !url.includes(' ')) {
           url = 'https://' + url;
         } else {
-          // Use DuckDuckGo for search
+          // Treat as search query - use DuckDuckGo
           url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
         }
       }
@@ -141,12 +146,11 @@ const AddressBar = ({
       {/* Shield Button - Ad Blocker Status */}
       <motion.button
         ref={shieldButtonRef}
-        data-shield-button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => setShowShieldPopup(!showShieldPopup)}
+        onClick={handleShieldClick}
         title="Reklam Engelleyici"
-        className="w-9 h-9 rounded-lg glass flex items-center justify-center transition-all relative
+        className="shield-button w-9 h-9 rounded-lg glass flex items-center justify-center transition-all relative
                    text-emerald-400 hover:text-emerald-300 neon-glow-green"
         style={{
           boxShadow: blockedAds > 0 
@@ -154,10 +158,12 @@ const AddressBar = ({
             : 'none'
         }}
       >
+        {/* Shield Icon */}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
         </svg>
         
+        {/* Blocked count badge */}
         {blockedAds > 0 && (
           <motion.div
             initial={{ scale: 0 }}
@@ -170,63 +176,65 @@ const AddressBar = ({
         )}
       </motion.button>
 
-      {/* Shield Popup - rendered via Portal */}
-      {showShieldPopup && createPortal(
+      {/* Shield Popup - Rendered via Portal */}
+      {createPortal(
         <AnimatePresence>
-          <motion.div
-            data-shield-popup
-            initial={{ opacity: 0, y: 10, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            className="fixed w-64 glass rounded-xl border border-emerald-500/20 p-4"
-            style={{ 
-              top: popupPosition.top,
-              left: popupPosition.left,
-              zIndex: 99999,
-              boxShadow: '0 0 30px rgba(52, 211, 153, 0.2)' 
-            }}
-          >
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 
-                             flex items-center justify-center">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                </svg>
+          {showShieldPopup && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="shield-popup fixed w-64 bg-dark-surface border border-emerald-500/30 rounded-xl p-4"
+              style={{ 
+                top: popupPosition.top,
+                left: popupPosition.left,
+                zIndex: 99999,
+                boxShadow: '0 0 30px rgba(52, 211, 153, 0.3), 0 8px 32px rgba(0,0,0,0.8)' 
+              }}
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 
+                               flex items-center justify-center">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">Koruma Aktif</h3>
+                  <p className="text-emerald-400 text-xs">Brave seviyesi engelleme</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-white font-semibold">Koruma Aktif</h3>
-                <p className="text-emerald-400 text-xs">Brave seviyesi engelleme</p>
+              
+              <div className="bg-dark-bg/50 rounded-lg p-3 mb-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70 text-sm">Engellenen Reklamlar</span>
+                  <span className="text-emerald-400 font-bold text-lg">{blockedAds}</span>
+                </div>
               </div>
-            </div>
-            
-            <div className="bg-dark-bg/50 rounded-lg p-3 mb-3">
-              <div className="flex justify-between items-center">
-                <span className="text-white/70 text-sm">Engellenen Reklamlar</span>
-                <span className="text-emerald-400 font-bold text-lg">{blockedAds}</span>
+              
+              <div className="space-y-2 text-xs text-white/60">
+                <div className="flex items-center space-x-2">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
+                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
+                  </svg>
+                  <span>YouTube Reklam Atlama</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
+                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
+                  </svg>
+                  <span>İzleyici/Tracker Engelleme</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
+                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
+                  </svg>
+                  <span>Gizlilik Koruması</span>
+                </div>
               </div>
-            </div>
-            
-            <div className="space-y-2 text-xs text-white/60">
-              <div className="flex items-center space-x-2">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
-                  <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                </svg>
-                <span>YouTube Reklam Atlama</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
-                  <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                </svg>
-                <span>İzleyici/Tracker Engelleme</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-emerald-400">
-                  <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                </svg>
-                <span>Gizlilik Koruması</span>
-              </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          )}
         </AnimatePresence>,
         document.body
       )}
@@ -255,7 +263,7 @@ const AddressBar = ({
           onFocus={() => setIsFocused(true)}
           onBlur={() => {
             setIsFocused(false);
-            setInputValue(currentUrl);
+            setInputValue(getDisplayUrl(currentUrl));
           }}
           placeholder="URL veya arama terimi girin..."
           className="flex-1 bg-transparent text-white/90 text-sm outline-none placeholder-white/40"

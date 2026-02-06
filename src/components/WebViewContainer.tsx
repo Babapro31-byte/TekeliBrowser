@@ -1,7 +1,8 @@
-import { useEffect, useRef, memo, useCallback } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import type { Tab } from '../App';
 import NewTabPage from './NewTabPage';
 
+// Special internal URLs
 const NEWTAB_URL = 'tekeli://newtab';
 
 interface WebViewContainerProps {
@@ -15,16 +16,17 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
   const isReadyRef = useRef(false);
   const lastTitleRef = useRef('');
-  
+
+  // Check if this is the new tab page
   const isNewTabPage = tab.url === NEWTAB_URL;
-  
-  const handleNewTabNavigate = useCallback((url: string) => {
-    if (onNavigate) {
-      onNavigate(url);
-    }
-  }, [onNavigate]);
 
   useEffect(() => {
+    // Set title for new tab page
+    if (isNewTabPage) {
+      onTitleUpdate('Yeni Sekme');
+      return;
+    }
+
     const webview = webviewRef.current;
     if (!webview) return;
 
@@ -63,9 +65,16 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
       window.removeEventListener('browser-navigation', onNavigation);
       isReadyRef.current = false;
     };
-  }, [tab.id, onTitleUpdate]);
+  }, [tab.id, tab.url, onTitleUpdate, isNewTabPage]);
 
-  // Show custom new tab page
+  // Handle navigation from NewTabPage
+  const handleNewTabNavigate = (url: string) => {
+    if (onNavigate) {
+      onNavigate(url);
+    }
+  };
+
+  // Show NewTabPage for internal newtab URL
   if (isNewTabPage) {
     return (
       <div className="w-full h-full">

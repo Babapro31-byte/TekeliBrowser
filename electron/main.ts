@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { initAdBlocker, setPrivacyUserAgent, getBlockStats, forceUpdateFilters, getFilterManager } from './adBlocker.js';
 import { generateYouTubeAdBlockerScript } from './youtubeAdBlocker.js';
+import { initAutoUpdater, checkForUpdatesOnStartup, getCurrentVersion } from './autoUpdater.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -165,6 +166,13 @@ app.whenReady().then(async () => {
   // Create main window
   createWindow();
   
+  // Initialize auto-updater after window is created
+  if (mainWindow) {
+    initAutoUpdater(mainWindow);
+    // Check for updates on startup (with delay)
+    checkForUpdatesOnStartup();
+  }
+  
   // Handle macOS activate
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -172,7 +180,7 @@ app.whenReady().then(async () => {
     }
   });
   
-  console.log('[TekeliBrowser] v1.1 started successfully');
+  console.log(`[TekeliBrowser] v${getCurrentVersion()} started successfully`);
 });
 
 app.on('window-all-closed', () => {

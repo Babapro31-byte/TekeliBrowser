@@ -27,6 +27,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
   const [editingLink, setEditingLink] = useState<QuickLink | null>(null);
   const [modalName, setModalName] = useState('');
   const [modalUrl, setModalUrl] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Load quick links from localStorage
   useEffect(() => {
@@ -117,8 +118,30 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
     saveLinks(updatedLinks);
   };
 
+  // Right-click context menu
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  // Close context menu on click anywhere
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, [contextMenu]);
+
+  const handleReloadPage = () => {
+    setContextMenu(null);
+    window.location.reload();
+  };
+
   return (
-    <div className="w-full h-full bg-dark-bg flex flex-col items-center justify-center relative overflow-hidden">
+    <div 
+      className="w-full h-full bg-dark-bg flex flex-col items-center justify-center relative overflow-hidden"
+      onContextMenu={handleContextMenu}
+    >
       {/* Animated Background Gradient Blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Large cyan blob - top left */}
@@ -195,21 +218,115 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
         transition={{ duration: 0.5 }}
         className="relative z-10 flex flex-col items-center gap-8 px-4"
       >
-        {/* Logo with glow animation */}
+        {/* Atom Logo */}
         <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
+          initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="relative"
+          transition={{ duration: 0.7, delay: 0.1, type: "spring", stiffness: 200, damping: 15 }}
+          className="relative w-52 h-52 flex items-center justify-center"
         >
-          <img src="/logo.svg" alt="TekeliBrowser" className="w-32 h-32 drop-shadow-2xl" />
+          {/* Pulsing glow behind */}
           <motion.div 
-            animate={{ 
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3]
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute inset-0 w-32 h-32 bg-gradient-to-br from-cyan-400/30 to-purple-500/30 rounded-full blur-xl -z-10" 
+            animate={{ scale: [1, 1.3, 1], opacity: [0.15, 0.3, 0.15] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 bg-gradient-to-br from-cyan-400/25 to-blue-500/15 rounded-full blur-2xl" 
+          />
+
+          <div 
+            className="w-full h-full"
+            dangerouslySetInnerHTML={{ __html: `
+              <svg viewBox="0 0 300 300" width="100%" height="100%">
+                <defs>
+                  <radialGradient id="coreSphere" cx="35%" cy="35%" r="65%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+                    <stop offset="20%" stop-color="#e0f7ff" stop-opacity="0.95"/>
+                    <stop offset="45%" stop-color="#67e8f9" stop-opacity="0.8"/>
+                    <stop offset="70%" stop-color="#0891b2" stop-opacity="0.55"/>
+                    <stop offset="100%" stop-color="#032a33" stop-opacity="0.9"/>
+                  </radialGradient>
+                  <radialGradient id="eSphere" cx="30%" cy="30%" r="70%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+                    <stop offset="25%" stop-color="#e0f7ff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#67e8f9" stop-opacity="0.8"/>
+                    <stop offset="75%" stop-color="#0891b2" stop-opacity="0.55"/>
+                    <stop offset="100%" stop-color="#032a33" stop-opacity="0.9"/>
+                  </radialGradient>
+                  <filter id="eGlow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                  <filter id="cGlow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                <style>
+                  @keyframes e1 {
+                    0%     { transform: translate(70px, 0px); }
+                    8.33%  { transform: translate(60.6px, 14px); }
+                    16.67% { transform: translate(35px, 24.2px); }
+                    25%    { transform: translate(0px, 28px); }
+                    33.33% { transform: translate(-35px, 24.2px); }
+                    41.67% { transform: translate(-60.6px, 14px); }
+                    50%    { transform: translate(-70px, 0px); }
+                    58.33% { transform: translate(-60.6px, -14px); }
+                    66.67% { transform: translate(-35px, -24.2px); }
+                    75%    { transform: translate(0px, -28px); }
+                    83.33% { transform: translate(35px, -24.2px); }
+                    91.67% { transform: translate(60.6px, -14px); }
+                    100%   { transform: translate(70px, 0px); }
+                  }
+                  @keyframes e2 {
+                    0%     { transform: translate(90px, 0px); }
+                    8.33%  { transform: translate(77.9px, 17.5px); }
+                    16.67% { transform: translate(45px, 30.3px); }
+                    25%    { transform: translate(0px, 35px); }
+                    33.33% { transform: translate(-45px, 30.3px); }
+                    41.67% { transform: translate(-77.9px, 17.5px); }
+                    50%    { transform: translate(-90px, 0px); }
+                    58.33% { transform: translate(-77.9px, -17.5px); }
+                    66.67% { transform: translate(-45px, -30.3px); }
+                    75%    { transform: translate(0px, -35px); }
+                    83.33% { transform: translate(45px, -30.3px); }
+                    91.67% { transform: translate(77.9px, -17.5px); }
+                    100%   { transform: translate(90px, 0px); }
+                  }
+                  @keyframes e3 {
+                    0%     { transform: translate(110px, 0px); }
+                    8.33%  { transform: translate(95.3px, 21px); }
+                    16.67% { transform: translate(55px, 36.4px); }
+                    25%    { transform: translate(0px, 42px); }
+                    33.33% { transform: translate(-55px, 36.4px); }
+                    41.67% { transform: translate(-95.3px, 21px); }
+                    50%    { transform: translate(-110px, 0px); }
+                    58.33% { transform: translate(-95.3px, -21px); }
+                    66.67% { transform: translate(-55px, -36.4px); }
+                    75%    { transform: translate(0px, -42px); }
+                    83.33% { transform: translate(55px, -36.4px); }
+                    91.67% { transform: translate(95.3px, -21px); }
+                    100%   { transform: translate(110px, 0px); }
+                  }
+                </style>
+
+                <!-- Orbit 1: tilted -60deg -->
+                <g transform="rotate(-60,150,150)">
+                  <ellipse cx="150" cy="150" rx="70" ry="28" fill="none" stroke="rgba(0,212,255,0.15)" stroke-width="0.8"/>
+                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e1 4s linear infinite;"/>
+                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e1 4s linear infinite; animation-delay: -2s;"/>
+                </g>
+
+                <!-- Orbit 2: tilted 0deg -->
+                <g>
+                  <ellipse cx="150" cy="150" rx="90" ry="35" fill="none" stroke="rgba(0,212,255,0.12)" stroke-width="0.8"/>
+                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e2 6s linear infinite;"/>
+                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e2 6s linear infinite; animation-delay: -3s;"/>
+                </g>
+
+                <!-- Orbit 3: tilted 60deg -->
+                <g transform="rotate(60,150,150)">
+                  <ellipse cx="150" cy="150" rx="110" ry="42" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="0.8"/>
+                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e3 8s linear infinite;"/>
+                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e3 8s linear infinite; animation-delay: -4s;"/>
+                </g>
+
+                <!-- Core sphere - static -->
+                <circle cx="150" cy="150" r="22" fill="url(#coreSphere)" filter="url(#cGlow)"/>
+              </svg>
+            ` }}
           />
         </motion.div>
         
@@ -416,8 +533,54 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
         )}
       </AnimatePresence>
       
+      {/* Right-click Context Menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.12 }}
+            className="fixed z-[9999] min-w-[180px] py-1.5 rounded-xl bg-dark-surface/95 backdrop-blur-xl border border-white/10 shadow-2xl shadow-black/50"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button
+              onClick={handleReloadPage}
+              className="w-full px-4 py-2.5 text-left text-sm text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan-400">
+                <path d="M23 4v6h-6" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Sayfayi Yenile
+            </button>
+            <button
+              onClick={() => setContextMenu(null)}
+              className="w-full px-4 py-2.5 text-left text-sm text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-400">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+              Yer Imi Ekle
+            </button>
+            <div className="mx-3 my-1 h-px bg-white/10" />
+            <button
+              onClick={() => setContextMenu(null)}
+              className="w-full px-4 py-2.5 text-left text-sm text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/40">
+                <path d="M16 18l2-2v-4l-2-2" />
+                <path d="M8 18l-2-2v-4l2-2" />
+                <path d="M14.5 4l-5 16" />
+              </svg>
+              Kaynak Kodunu Gor
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="absolute bottom-4 text-white/20 text-xs">
-        TekeliBrowser v1.1
+        TekeliBrowser v1.2
       </div>
     </div>
   );

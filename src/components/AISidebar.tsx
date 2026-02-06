@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface AISidebarProps {
@@ -6,6 +7,17 @@ interface AISidebarProps {
 }
 
 const AISidebar = ({ isOpen, onClose }: AISidebarProps) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Placeholder - backend entegrasyonu ileride yapilacak
+    alert(isLogin ? 'Giris yapiliyor...' : 'Kayit olunuyor...');
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -20,11 +32,12 @@ const AISidebar = ({ isOpen, onClose }: AISidebarProps) => {
           <div className="h-14 border-b border-neon-purple/20 flex items-center justify-between px-4">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-blue to-neon-purple flex items-center justify-center">
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="white" strokeWidth="1.5">
-                  <path d="M9 3L11 7L15 8L12 11L13 15L9 13L5 15L6 11L3 8L7 7L9 3Z" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <circle cx="12" cy="8" r="5" />
+                  <path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2" />
                 </svg>
               </div>
-              <span className="text-white/90 font-semibold">AI Asistan</span>
+              <span className="text-white/90 font-semibold">Hesabim</span>
             </div>
             
             <motion.button
@@ -41,57 +54,157 @@ const AISidebar = ({ isOpen, onClose }: AISidebarProps) => {
           
           {/* Content */}
           <div className="flex-1 p-4 overflow-y-auto">
-            <div className="text-center py-8">
-              <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-neon-blue/20 to-neon-purple/20 flex items-center justify-center">
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="url(#gradient)" strokeWidth="2">
+            <div className="flex flex-col items-center py-6">
+              {/* Profile Avatar */}
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="w-24 h-24 rounded-full bg-gradient-to-br from-neon-blue/20 to-neon-purple/20 border-2 border-neon-blue/30 flex items-center justify-center mb-6"
+              >
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="url(#sidebarGradient)" strokeWidth="1.5">
                   <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#00f0ff" />
-                      <stop offset="100%" stopColor="#b026ff" />
+                    <linearGradient id="sidebarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#00d4ff" />
+                      <stop offset="100%" stopColor="#a855f7" />
                     </linearGradient>
                   </defs>
-                  <circle cx="20" cy="14" r="8" />
-                  <path d="M8 36C8 29.3726 13.3726 24 20 24C26.6274 24 32 29.3726 32 36" />
+                  <circle cx="12" cy="8" r="5" />
+                  <path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2" />
                 </svg>
+              </motion.div>
+              
+              {/* Login/Register Toggle */}
+              <div className="flex w-full rounded-xl bg-dark-bg/50 p-1 mb-6">
+                <button
+                  onClick={() => setIsLogin(true)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    isLogin 
+                      ? 'bg-gradient-to-r from-neon-blue/30 to-neon-purple/30 text-white border border-neon-blue/30' 
+                      : 'text-white/50 hover:text-white/70'
+                  }`}
+                >
+                  Giris Yap
+                </button>
+                <button
+                  onClick={() => setIsLogin(false)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    !isLogin 
+                      ? 'bg-gradient-to-r from-neon-blue/30 to-neon-purple/30 text-white border border-neon-blue/30' 
+                      : 'text-white/50 hover:text-white/70'
+                  }`}
+                >
+                  Kayit Ol
+                </button>
               </div>
               
-              <h3 className="text-xl font-bold text-white/90 mb-2">Yakında Geliyor</h3>
-              <p className="text-white/60 text-sm mb-6">
-                AI destekli web asistanınız. Sohbet edin, sorular sorun ve daha fazlasını yapın.
-              </p>
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="w-full space-y-4">
+                {/* Email */}
+                <div>
+                  <label className="block text-white/50 text-xs mb-1.5 ml-1">E-posta</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="4" width="20" height="16" rx="3" />
+                        <path d="M22 7l-10 6L2 7" />
+                      </svg>
+                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="ornek@mail.com"
+                      className="w-full pl-10 pr-4 py-3 bg-dark-bg/50 border border-white/10 rounded-xl text-white text-sm placeholder-white/30 outline-none focus:border-neon-blue/50 transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                {/* Password */}
+                <div>
+                  <label className="block text-white/50 text-xs mb-1.5 ml-1">Sifre</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="********"
+                      className="w-full pl-10 pr-12 py-3 bg-dark-bg/50 border border-white/10 rounded-xl text-white text-sm placeholder-white/30 outline-none focus:border-neon-blue/50 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      {showPassword ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Forgot Password (Login only) */}
+                {isLogin && (
+                  <div className="text-right">
+                    <button type="button" className="text-neon-blue/70 hover:text-neon-blue text-xs transition-colors">
+                      Sifremi Unuttum
+                    </button>
+                  </div>
+                )}
+                
+                {/* Submit Button */}
+                <motion.button
+                  type="submit"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-blue to-neon-purple text-white font-semibold text-sm shadow-lg shadow-neon-blue/20 hover:shadow-neon-blue/30 transition-shadow"
+                >
+                  {isLogin ? 'Giris Yap' : 'Kayit Ol'}
+                </motion.button>
+              </form>
               
-              {/* Feature List */}
-              <div className="text-left space-y-3">
-                {[
-                  { icon: '🤖', text: 'Yapay Zeka Sohbet' },
-                  { icon: '🔍', text: 'Akıllı Arama' },
-                  { icon: '📝', text: 'Sayfa Özeti' },
-                  { icon: '🌐', text: 'Çeviri Desteği' }
-                ].map((feature, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex items-center space-x-3 p-3 rounded-lg glass hover:neon-glow transition-all cursor-pointer"
-                  >
-                    <span className="text-2xl">{feature.icon}</span>
-                    <span className="text-white/80 text-sm">{feature.text}</span>
-                  </motion.div>
-                ))}
+              {/* Divider */}
+              <div className="flex items-center w-full my-6">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="px-3 text-white/30 text-xs">veya</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+              
+              {/* Social Login Buttons */}
+              <div className="w-full space-y-3">
+                <button className="w-full py-3 rounded-xl bg-dark-bg/50 border border-white/10 hover:border-white/20 text-white/70 hover:text-white text-sm flex items-center justify-center gap-3 transition-all">
+                  <svg width="18" height="18" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  </svg>
+                  Google ile Giris Yap
+                </button>
+                
+                <button className="w-full py-3 rounded-xl bg-dark-bg/50 border border-white/10 hover:border-white/20 text-white/70 hover:text-white text-sm flex items-center justify-center gap-3 transition-all">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                  </svg>
+                  GitHub ile Giris Yap
+                </button>
               </div>
             </div>
-          </div>
-          
-          {/* Footer */}
-          <div className="h-16 border-t border-neon-purple/20 flex items-center justify-center px-4">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="w-full h-10 rounded-lg bg-gradient-to-r from-neon-blue to-neon-purple text-white font-semibold neon-glow"
-            >
-              Beta'ya Katıl
-            </motion.button>
           </div>
         </motion.div>
       )}
