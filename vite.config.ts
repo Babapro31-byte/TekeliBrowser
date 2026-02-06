@@ -41,7 +41,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron', 'electron-updater']
+              external: ['electron']
             }
           },
           plugins: [copyPreloadFiles()]
@@ -53,7 +53,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron', 'electron-updater']
+              external: ['electron']
             }
           }
         }
