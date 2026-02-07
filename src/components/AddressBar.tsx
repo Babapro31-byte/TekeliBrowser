@@ -11,6 +11,7 @@ interface AddressBarProps {
   onToggleSplitView: () => void;
   splitViewActive: boolean;
   onToggleSidebar: () => void;
+  onOpenPrivacySettings?: () => void;
 }
 
 // Check if URL is an internal URL
@@ -30,7 +31,8 @@ const AddressBar = ({
   onReload,
   onToggleSplitView,
   splitViewActive,
-  onToggleSidebar
+  onToggleSidebar,
+  onOpenPrivacySettings
 }: AddressBarProps) => {
   const [inputValue, setInputValue] = useState(getDisplayUrl(currentUrl));
   const [isFocused, setIsFocused] = useState(false);
@@ -233,6 +235,17 @@ const AddressBar = ({
                   <span>Gizlilik Koruması</span>
                 </div>
               </div>
+              {onOpenPrivacySettings && (
+                <button
+                  onClick={() => {
+                    setShowShieldPopup(false);
+                    onOpenPrivacySettings();
+                  }}
+                  className="w-full mt-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-medium transition-colors"
+                >
+                  Gizlilik Ayarları
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>,

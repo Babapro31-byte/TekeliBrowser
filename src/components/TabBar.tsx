@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Tab } from '../App';
+import RecentlyClosedMenu from './RecentlyClosedMenu';
 
 interface TabBarProps {
   tabs: Tab[];
@@ -7,9 +8,11 @@ interface TabBarProps {
   onTabClick: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onAddTab: () => void;
+  onAddIncognitoTab?: () => void;
+  onReopenTab?: (url: string, title: string) => void;
 }
 
-const TabBar = ({ tabs, activeTabId, onTabClick, onTabClose, onAddTab }: TabBarProps) => {
+const TabBar = ({ tabs, activeTabId, onTabClick, onTabClose, onAddTab, onAddIncognitoTab, onReopenTab }: TabBarProps) => {
   return (
     <div className="h-10 bg-dark-surface/60 backdrop-blur-md border-b border-neon-blue/10 flex items-center px-2 gap-1 overflow-hidden">
       <AnimatePresence mode="popLayout">
@@ -32,8 +35,18 @@ const TabBar = ({ tabs, activeTabId, onTabClick, onTabClose, onAddTab }: TabBarP
             `}
             onClick={() => onTabClick(tab.id)}
           >
-            {/* Favicon placeholder */}
-            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-neon-blue/50 to-neon-purple/50 flex-shrink-0" />
+            {/* Favicon placeholder / Incognito icon */}
+            <div className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center ${
+              tab.isIncognito 
+                ? 'bg-purple-500/30' 
+                : 'bg-gradient-to-br from-neon-blue/50 to-neon-purple/50'
+            }`}>
+              {tab.isIncognito && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-purple-300">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              )}
+            </div>
             
             {/* Tab Title */}
             <span className={`text-xs truncate max-w-[140px] whitespace-nowrap ${
@@ -79,6 +92,28 @@ const TabBar = ({ tabs, activeTabId, onTabClick, onTabClose, onAddTab }: TabBarP
           <path d="M6 1V11M1 6H11" />
         </svg>
       </motion.button>
+
+      {/* Gizli Sekme Ac (Incognito) Button */}
+      {onAddIncognitoTab && (
+        <motion.button
+          layout
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onAddIncognitoTab}
+          title="Gizli Sekme Aç (Ctrl+Shift+N)"
+          className="w-8 h-8 rounded-lg bg-dark-surface/50 hover:bg-dark-hover/50 border border-transparent hover:border-purple-500/30 flex items-center justify-center text-purple-400 transition-all flex-shrink-0"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9 12h6" strokeLinecap="round" />
+          </svg>
+        </motion.button>
+      )}
+      
+      {/* Recently Closed Menu */}
+      {onReopenTab && (
+        <RecentlyClosedMenu onReopen={onReopenTab} />
+      )}
     </div>
   );
 };

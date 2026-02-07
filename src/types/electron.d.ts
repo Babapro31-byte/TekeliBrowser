@@ -27,6 +27,38 @@ export interface UpdateState {
   currentVersion: string;
 }
 
+export interface SessionTab {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface SessionData {
+  tabs: SessionTab[];
+  activeTabId: string;
+  wasCleanShutdown: boolean;
+} 
+
+export interface ClosedTab {
+  title: string;
+  url: string;
+  closedAt: number;
+}
+
+export interface HistoryEntry {
+  url: string;
+  title: string;
+  timestamp: number;
+  visitCount: number;
+}
+
+export interface HistoryQuery {
+  search?: string;
+  startDate?: number;
+  endDate?: number;
+  limit?: number;
+}
+
 export interface IElectronAPI {
   // Window controls
   minimizeWindow: () => void;
@@ -38,8 +70,38 @@ export interface IElectronAPI {
   navigateTab: (tabId: string, url: string) => Promise<{ success: boolean; tabId: string; url: string }>;
   closeTab: (tabId: string) => Promise<{ success: boolean; tabId: string }>;
   
+  // Session management
+  saveSession: (tabs: SessionTab[], activeTabId: string) => Promise<{ success: boolean }>;
+  restoreSession: () => Promise<SessionData | null>;
+  tabClosed: (tab: { title: string; url: string }) => Promise<{ success: boolean }>;
+  getRecentlyClosed: () => Promise<ClosedTab[]>;
+  createIncognitoPartition: () => Promise<{ partition: string }>;
+  clearIncognitoSession: (partition: string) => Promise<{ success: boolean }>;
+  
+  // History
+  addHistory: (url: string, title: string) => Promise<{ success: boolean }>;
+  getHistory: (query?: HistoryQuery) => Promise<HistoryEntry[]>;
+  clearHistory: (startDate?: number, endDate?: number) => Promise<{ success: boolean }>;
+  deleteHistoryEntry: (url: string) => Promise<{ success: boolean }>;
+  
+  // Permission prompts
+  onPermissionRequest: (callback: (data: { requestId: string; site: string; permission: string; requestingUrl?: string }) => void) => () => void;
+  permissionResponse: (data: { requestId: string; allow: boolean; remember: boolean; site: string; permission: string }) => Promise<{ success: boolean }>;
+  getAllPermissions: () => Promise<Record<string, Record<string, 'allow' | 'block'>>>;
+  clearSitePermission: (site?: string, permission?: string) => Promise<{ success: boolean }>;
+
+  // Popup redirect - open URL in new tab
+  onOpenUrlInNewTab: (callback: (url: string) => void) => () => void;
+
+  // Keyboard shortcut events from main process
+  onShortcut: (callback: (data: { action: string }) => void) => () => void;
+  
   // Ad blocker
   getAdBlockStats: () => Promise<AdBlockStats>;
+  setTrackerBlocking: (enabled: boolean) => Promise<{ success: boolean }>;
+  getTrackerBlocking: () => Promise<{ enabled: boolean }>;
+  setCookiePolicy: (policy: 'all' | 'block-third-party' | 'block-all') => Promise<{ success: boolean }>;
+  getCookiePolicy: () => Promise<{ policy: 'all' | 'block-third-party' | 'block-all' }>;
   
   // Auto-updater
   checkForUpdates: () => Promise<{ success: boolean; updateInfo?: UpdateInfo; error?: string }>;

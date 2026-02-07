@@ -42,6 +42,22 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
       }
     };
 
+    // Track history when page finishes loading
+    const onDidFinishLoad = () => {
+      try {
+        const wv = webview as any;
+        const currentUrl = wv.getURL?.() || tab.url;
+        const currentTitle = wv.getTitle?.() || lastTitleRef.current || tab.title;
+        
+        // Skip internal URLs
+        if (currentUrl && !currentUrl.startsWith('tekeli://') && currentUrl !== 'about:blank') {
+          window.electron?.addHistory?.(currentUrl, currentTitle);
+        }
+      } catch {
+        // Silently ignore
+      }
+    };
+
     const onNavigation = (e: any) => {
       if (!isReadyRef.current || e.detail?.tabId !== tab.id) return;
       
@@ -57,11 +73,13 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
 
     webview.addEventListener('dom-ready', onDomReady);
     webview.addEventListener('page-title-updated', onTitleUpdated);
+    webview.addEventListener('did-finish-load', onDidFinishLoad);
     window.addEventListener('browser-navigation', onNavigation);
 
     return () => {
       webview.removeEventListener('dom-ready', onDomReady);
       webview.removeEventListener('page-title-updated', onTitleUpdated);
+      webview.removeEventListener('did-finish-load', onDidFinishLoad);
       window.removeEventListener('browser-navigation', onNavigation);
       isReadyRef.current = false;
     };
@@ -84,22 +102,23 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
   }
 
   // Show webview for regular URLs
+  const partition = tab.isIncognito && tab.partition ? tab.partition : 'persist:browser';
   return (
     <div className="w-full h-full bg-dark-bg">
       <webview
         ref={webviewRef as any}
         src={tab.url}
         className="w-full h-full"
-        partition="persist:browser"
+        partition={partition}
         // @ts-ignore
         allowpopups="false"
       />
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if tab.id or tab.url changes
-  return prevProps.tab.id === nextProps.tab.id && 
-         prevProps.tab.url === nextProps.tab.url;
+  const prev = prevProps.tab;
+  const next = nextProps.tab;
+  return prev.id === next.id && prev.url === next.url && prev.partition === next.partition;
 });
 
 WebViewContainer.displayName = 'WebViewContainer';

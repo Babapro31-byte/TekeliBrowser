@@ -84,6 +84,204 @@ const AD_DOMAINS_SET = new Set([
   'nr-data.net'
 ]);
 
+// EasyPrivacy-style tracker domains (additional to AD_DOMAINS_SET)
+const TRACKER_DOMAINS_SET = new Set([
+  'facebook.com/tr',
+  'connect.facebook.net',
+  'www.facebook.com/tr',
+  'pixel.facebook.com',
+  'analytics.facebook.com',
+  'google-analytics.com',
+  'www.google-analytics.com',
+  'ssl.google-analytics.com',
+  'googletagmanager.com',
+  'www.googletagmanager.com',
+  'tagmanager.google.com',
+  'doubleclick.net',
+  'adservice.google.com',
+  'pagead2.googlesyndication.com',
+  'googleadservices.com',
+  'amazon-adsystem.com',
+  'bat.bing.com',
+  'snap.licdn.com',
+  'px.ads.linkedin.com',
+  'analytics.tiktok.com',
+  'pixel.tiktok.com',
+  'hotjar.com',
+  'script.hotjar.com',
+  'mixpanel.com',
+  'api.mixpanel.com',
+  'segment.io',
+  'cdn.segment.com',
+  'api.segment.io',
+  'fullstory.com',
+  'rs.fullstory.com',
+  'clarity.ms',
+  'www.clarity.ms',
+  'mouseflow.com',
+  'luckyorange.com',
+  'crazyegg.com',
+  'sessioncam.com',
+  'inspectlet.com',
+  'sumome.com',
+  'sharethis.com',
+  'addthis.com',
+  'gravatar.com/avatar',  // tracking via gravatar
+  'sentry.io',
+  'bugsnag.com',
+  'logrocket.com',
+  'amplitude.com',
+  'heapanalytics.com',
+  'intercom.io',
+  'drift.com',
+  'hubspot.com',
+  'hs-analytics.net',
+  'hs-scripts.com',
+  'pardot.com',
+  'marketo.com',
+  'quantserve.com',
+  'scorecardresearch.com',
+  'demdex.net',
+  'everesttech.net',
+  'exelator.com',
+  'bluekai.com',
+  'krxd.net',
+  'rlcdn.com',
+  'adsrvr.org',
+  'casalemedia.com',
+  'lijit.com',
+  'connextra.com',
+  'tribalfusion.com',
+  'media.net',
+  'criteo.com',
+  'criteo.net',
+  'taboola.com',
+  'outbrain.com',
+  'mgid.com',
+  'revcontent.com',
+  'zemanta.com',
+  'gumgum.com',
+  'teads.tv',
+  'spotxchange.com',
+  'freewheel.tv',
+  'springserve.com',
+  'yieldmo.com',
+  'triplelift.com',
+  'sharethrough.com',
+  'undertone.com',
+  'conversantmedia.com',
+  'advertising.com',
+  'adroll.com',
+  'retargeter.com',
+  'perfect-audience.com',
+  'adnxs.com',
+  'adsymptotic.com',
+  'bidswitch.net',
+  'mathtag.com',
+  'mediamath.com',
+  'turn.com',
+  'liveramp.com',
+  'lotame.com',
+  'digiTrust.com',
+  'idx.com',
+  'bidtheatre.com',
+  'adform.net',
+  'smartadserver.com',
+  'sovrn.com',
+  'openx.net',
+  'rubiconproject.com',
+  'pubmatic.com',
+  'contextweb.com',
+  'lijit.com',
+  'appnexus.com',
+  '2mdn.net',
+  'googlesyndication.com',
+  'google.com/pagead',
+  'tpc.googlesyndication.com',
+  'pagead2.googlesyndication.com'
+]);
+
+// Tracking query parameters to strip from URLs
+const TRACKING_PARAMS = [
+  'fbclid',           // Facebook click ID
+  'gclid',            // Google click ID
+  'gclsrc',           // Google click source
+  'dclid',            // DoubleClick click ID
+  'wbraid',           // Google web-to-app
+  'gbraid',           // Google app-to-web
+  'msclkid',          // Microsoft/Bing click ID
+  'mc_cid',           // Mailchimp campaign ID
+  'mc_eid',           // Mailchimp email ID
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'utm_id',
+  '_ga',              // Google Analytics
+  '_gl',              // Google link
+  '_hsenc',
+  '_hsmi',
+  'ref',
+  'ref_src',
+  'ref_url',
+  'referrer',
+  'source',
+  'campaign',
+  'mkt_tok',
+  'trk',
+  'trkCampaign',
+  'usqp',
+  'oq',
+  'ved',
+  'ei',
+  'gs_l',
+  'gws_rd',
+  'ijn',
+  'srsltid',
+  'os_ehash',
+  '_kx',
+  'vero_id',
+  'hsa_acc',
+  'hsa_cam',
+  'hsa_grp',
+  'hsa_ad',
+  'hsa_src',
+  'hsa_tgt',
+  'hsa_kw',
+  'hsa_mt',
+  'hsa_net',
+  'hsa_ver'
+];
+
+// Tracker blocking toggle (default enabled)
+let trackerBlockingEnabled = true;
+
+/**
+ * Strip tracking query parameters from URL
+ */
+function stripTrackingParams(url: string): string | null {
+  try {
+    const u = new URL(url);
+    let modified = false;
+    for (const param of TRACKING_PARAMS) {
+      if (u.searchParams.has(param)) {
+        u.searchParams.delete(param);
+        modified = true;
+      }
+    }
+    // Also strip utm_* params (catch-all)
+    const toDelete: string[] = [];
+    u.searchParams.forEach((_, key) => {
+      if (key.toLowerCase().startsWith('utm_')) toDelete.push(key);
+    });
+    toDelete.forEach(k => { u.searchParams.delete(k); modified = true; });
+    return modified ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 // YouTube-specific ad patterns (URL paths and parameters)
 const YOUTUBE_AD_PATTERNS = [
   // Ad serving endpoints
@@ -165,6 +363,17 @@ function getHostname(url: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * Check if hostname/URL matches known tracker domain
+ */
+function isTrackerDomain(url: string): boolean {
+  const hostname = getHostname(url);
+  for (const tracker of TRACKER_DOMAINS_SET) {
+    if (hostname.includes(tracker) || url.includes(tracker)) return true;
+  }
+  return false;
 }
 
 /**
@@ -293,11 +502,29 @@ export async function initAdBlocker(ses: Electron.Session): Promise<void> {
   
   // Set up request interception
   ses.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
-    const { url } = details;
+    let { url } = details;
     
     // Skip non-http(s) immediately
     if (!url.startsWith('http')) {
       callback({ cancel: false });
+      return;
+    }
+
+    // Tracker blocking: strip tracking params (mainFrame navigations only)
+    if (trackerBlockingEnabled && details.resourceType === 'mainFrame') {
+      const stripped = stripTrackingParams(url);
+      if (stripped && stripped !== url) {
+        callback({ redirectURL: stripped });
+        return;
+      }
+    }
+
+    // Tracker blocking: block known tracker domains
+    if (trackerBlockingEnabled && isTrackerDomain(url)) {
+      totalBlocked++;
+      sessionBlocked++;
+      blockStats.tracking++;
+      callback({ cancel: true });
       return;
     }
     
@@ -396,11 +623,28 @@ export function clearCache(): void {
   console.log('[AdBlocker] Cache cleared');
 }
 
+/**
+ * Enable/disable tracker blocking (EasyPrivacy-style domains + URL param stripping)
+ */
+export function setTrackerBlocking(enabled: boolean): void {
+  trackerBlockingEnabled = enabled;
+  console.log('[AdBlocker] Tracker blocking:', enabled ? 'enabled' : 'disabled');
+}
+
+/**
+ * Get tracker blocking state
+ */
+export function isTrackerBlockingEnabled(): boolean {
+  return trackerBlockingEnabled;
+}
+
 export default { 
   initAdBlocker, 
   setPrivacyUserAgent, 
   getBlockStats, 
   forceUpdateFilters,
   getFilterManager,
-  clearCache
+  clearCache,
+  setTrackerBlocking,
+  isTrackerBlockingEnabled
 };

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { ClosedTab } from '../types/electron';
 
 interface NewTabPageProps {
   onNavigate: (url: string) => void;
@@ -28,6 +29,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
   const [modalName, setModalName] = useState('');
   const [modalUrl, setModalUrl] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [recentlyClosed, setRecentlyClosed] = useState<ClosedTab[]>([]);
 
   // Load quick links from localStorage
   useEffect(() => {
@@ -42,6 +44,20 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
     } catch {
       setQuickLinks(DEFAULT_LINKS);
     }
+  }, []);
+
+  // Load recently closed tabs
+  useEffect(() => {
+    const loadClosed = async () => {
+      if (!window.electron?.getRecentlyClosed) return;
+      try {
+        const tabs = await window.electron.getRecentlyClosed();
+        setRecentlyClosed(tabs?.slice(0, 5) || []);
+      } catch {
+        setRecentlyClosed([]);
+      }
+    };
+    loadClosed();
   }, []);
 
   // Save quick links to localStorage
@@ -465,6 +481,37 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
             Ekle
           </motion.button>
         </motion.div>
+        {/* Recently Closed Tabs */}
+        {recentlyClosed.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+            className="mt-8 w-full max-w-xl"
+          >
+            <p className="text-white/30 text-xs mb-3 px-1">Son kapatilan sekmeler</p>
+            <div className="space-y-1">
+              {recentlyClosed.map((tab, i) => (
+                <motion.button
+                  key={`${tab.url}-${tab.closedAt}-${i}`}
+                  whileHover={{ x: 4 }}
+                  onClick={() => onNavigate(tab.url)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-dark-surface/30 hover:bg-dark-surface/50 border border-white/5 hover:border-cyan-500/20 transition-all text-left group"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan-400/60">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  </div>
+                  <span className="text-xs text-white/60 group-hover:text-white/80 truncate transition-colors">
+                    {tab.title}
+                  </span>
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
       </motion.div>
       
       {/* Add/Edit Modal */}
