@@ -44,10 +44,10 @@ function sendStatusToWindow(channel: string, data?: any) {
 export function initAutoUpdater(win: BrowserWindow): void {
   mainWindow = win;
 
-  // Configure auto-updater
-  autoUpdater.autoDownload = false; // Don't auto-download, let user decide
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.autoRunAppAfterInstall = true;
+  // Configure auto-updater - fully automatic
+  autoUpdater.autoDownload = true; // Automatically download updates
+  autoUpdater.autoInstallOnAppQuit = true; // Install when user quits the app
+  autoUpdater.autoRunAppAfterInstall = true; // Restart app after install
 
   // For development, allow checking for updates
   if (!app.isPackaged) {
@@ -102,7 +102,7 @@ export function initAutoUpdater(win: BrowserWindow): void {
     });
   });
 
-  // Update downloaded
+  // Update downloaded - auto install after short delay
   autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
     console.log('[AutoUpdater] Update downloaded:', info.version);
     updateState.downloading = false;
@@ -113,6 +113,12 @@ export function initAutoUpdater(win: BrowserWindow): void {
       releaseDate: info.releaseDate,
       releaseNotes: info.releaseNotes
     });
+
+    // Auto install after 5 seconds - gives UI time to show notification
+    setTimeout(() => {
+      console.log('[AutoUpdater] Auto-installing update...');
+      autoUpdater.quitAndInstall(false, true);
+    }, 5000);
   });
 
   // Error handling
