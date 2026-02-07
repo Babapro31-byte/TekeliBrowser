@@ -50,7 +50,7 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
         const currentTitle = wv.getTitle?.() || lastTitleRef.current || tab.title;
         
         // Skip internal URLs
-        if (currentUrl && !currentUrl.startsWith('tekeli://') && currentUrl !== 'about:blank') {
+        if (!tab.isIncognito && currentUrl && !currentUrl.startsWith('tekeli://') && currentUrl !== 'about:blank') {
           window.electron?.addHistory?.(currentUrl, currentTitle);
         }
       } catch {

@@ -1,6 +1,6 @@
 {
   "name": "tekeli-browser",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Ultra-modern desktop browser with Glassmorphism and Neon design",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -23,12 +23,14 @@
     "electron-updater": "^6.7.3",
     "framer-motion": "^11.0.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
+    "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "concurrently": "^8.2.2",
@@ -51,6 +53,12 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+        "to": "sql-wasm.wasm"
+      }
     ],
     "publish": {
       "provider": "github",

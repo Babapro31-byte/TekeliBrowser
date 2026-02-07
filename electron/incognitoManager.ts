@@ -25,7 +25,7 @@ export function clearIncognitoSession(partition: string): void {
   if (!partition.startsWith(PARTITION_PREFIX)) return;
   try {
     const sess = session.fromPartition(partition);
-    sess.clearStorageData({ storages: ['cookies', 'cache', 'localstorage', 'indexdb'] });
+    sess.clearStorageData({ storages: ['cookies', 'cachestorage', 'localstorage', 'indexdb'] });
     sess.clearCache();
     console.log(`[IncognitoManager] Cleared session: ${partition}`);
   } catch (err: any) {

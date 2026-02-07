@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('electron', {
   getTrackerBlocking: () => ipcRenderer.invoke('get-tracker-blocking'),
   setCookiePolicy: (policy) => ipcRenderer.invoke('set-cookie-policy', policy),
   getCookiePolicy: () => ipcRenderer.invoke('get-cookie-policy'),
+  setSearchEngine: (engine) => ipcRenderer.invoke('set-search-engine', engine),
+  getSearchEngine: () => ipcRenderer.invoke('get-search-engine'),
   
   // Auto-updater
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
@@ -40,6 +42,15 @@ contextBridge.exposeInMainWorld('electron', {
   getHistory: (query) => ipcRenderer.invoke('get-history', query),
   clearHistory: (startDate, endDate) => ipcRenderer.invoke('clear-history', startDate, endDate),
   deleteHistoryEntry: (url) => ipcRenderer.invoke('delete-history-entry', url),
+
+  // Bookmarks
+  addBookmark: (url, title) => ipcRenderer.invoke('add-bookmark', url, title),
+  removeBookmark: (url) => ipcRenderer.invoke('remove-bookmark', url),
+  isBookmarked: (url) => ipcRenderer.invoke('is-bookmarked', url),
+  getBookmarks: (query) => ipcRenderer.invoke('get-bookmarks', query),
+
+  // Omnibox
+  getOmniboxSuggestions: (search, limit) => ipcRenderer.invoke('get-omnibox-suggestions', search, limit),
   
   // Permission request from main process
   onPermissionRequest: (callback) => {

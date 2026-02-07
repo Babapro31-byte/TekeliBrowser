@@ -4,11 +4,14 @@ import { fileURLToPath } from 'url';
 import { initAdBlocker, setPrivacyUserAgent, getBlockStats, forceUpdateFilters, getFilterManager, setTrackerBlocking, isTrackerBlockingEnabled } from './adBlocker.js';
 import { generateYouTubeAdBlockerScript } from './youtubeAdBlocker.js';
 import { initAutoUpdater, checkForUpdatesOnStartup, getCurrentVersion } from './autoUpdater.js';
+import { initDatabase, flushDatabase } from './db.js';
 import { initSessionManager } from './sessionManager.js';
 import { initHistoryManager } from './historyManager.js';
+import { initBookmarksManager } from './bookmarksManager.js';
+import { initOmniboxManager } from './omniboxManager.js';
 import { initIncognitoManager, createIncognitoPartition, clearIncognitoSession } from './incognitoManager.js';
 import { getSiteFromUrl, getPermission, setPermission, getAllPermissions, clearPermission } from './permissionManager.js';
-import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting } from './settingsManager.js';
+import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting, getSearchEngine, setSearchEngine } from './settingsManager.js';
 import { isValidSender } from './ipcValidation.js';
 
 /** Extract registrable domain from hostname (e.g. "m.youtube.com" -> "youtube.com") */
@@ -126,6 +129,20 @@ function createWindow() {
       mainWindow?.webContents.toggleDevTools();
       return;
     }
+
+    // F11 - Fullscreen toggle
+    if (input.key === 'F11') {
+      event.preventDefault();
+      if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      return;
+    }
+
+    // F5 - Reload
+    if (input.key === 'F5') {
+      event.preventDefault();
+      mainWindow?.webContents.send('keyboard-shortcut', { action: 'reload' });
+      return;
+    }
     
     const ctrl = input.control || input.meta;
     
@@ -168,6 +185,13 @@ function createWindow() {
     if (ctrl && !input.shift && input.key === 'l') {
       event.preventDefault();
       mainWindow?.webContents.send('keyboard-shortcut', { action: 'focus-addressbar' });
+      return;
+    }
+
+    // Ctrl+R - Reload
+    if (ctrl && !input.shift && (input.key === 'r' || input.key === 'R')) {
+      event.preventDefault();
+      mainWindow?.webContents.send('keyboard-shortcut', { action: 'reload' });
       return;
     }
     
@@ -389,6 +413,18 @@ ipcMain.handle('get-cookie-policy', async (event) => {
   return { policy: getCookiePolicy() };
 });
 
+// IPC Handler - Default search engine (omnibox)
+ipcMain.handle('set-search-engine', async (event, engine: 'duckduckgo' | 'google') => {
+  if (!isValidSender(event)) throw new Error('Invalid sender');
+  setSearchEngine(engine);
+  return { success: true };
+});
+
+ipcMain.handle('get-search-engine', async (event) => {
+  if (!isValidSender(event)) throw new Error('Invalid sender');
+  return { engine: getSearchEngine() };
+});
+
 // IPC Handler - Site permissions (for PrivacySettings)
 ipcMain.handle('get-all-permissions', async (event) => {
   if (!isValidSender(event)) throw new Error('Invalid sender');
@@ -427,6 +463,82 @@ ipcMain.on('request-adblock-script', (event) => {
 // Navigation guards - block dangerous URLs and redirect popups to new tab
 function setupNavigationGuards() {
   app.on('web-contents-created', (_, contents) => {
+    if (contents.getType() === 'webview') {
+      contents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return;
+        if (!mainWindow) return;
+
+        if (input.key === 'F11') {
+          event.preventDefault();
+          mainWindow.setFullScreen(!mainWindow.isFullScreen());
+          return;
+        }
+
+        if (input.key === 'F5') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'reload' });
+          return;
+        }
+
+        const ctrl = input.control || input.meta;
+        if (!ctrl) return;
+
+        if (!input.shift && input.key === 't') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'new-tab' });
+          return;
+        }
+
+        if (!input.shift && input.key === 'w') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'close-tab' });
+          return;
+        }
+
+        if (input.shift && input.key === 'T') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'reopen-tab' });
+          return;
+        }
+
+        if (input.shift && input.key === 'N') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'new-incognito-tab' });
+          return;
+        }
+
+        if (!input.shift && input.key === 'h') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'toggle-history' });
+          return;
+        }
+
+        if (!input.shift && input.key === 'l') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'focus-addressbar' });
+          return;
+        }
+
+        if (!input.shift && (input.key === 'r' || input.key === 'R')) {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'reload' });
+          return;
+        }
+
+        if (!input.shift && input.key === 'Tab') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'next-tab' });
+          return;
+        }
+
+        if (input.shift && input.key === 'Tab') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'prev-tab' });
+          return;
+        }
+      });
+    }
+
     contents.on('will-navigate', (event, url) => {
       const parsed = new URL(url);
       const scheme = parsed.protocol.replace(':', '');
@@ -467,9 +579,13 @@ app.whenReady().then(async () => {
   setupNavigationGuards();
   setupMainSessionCSP();
 
+  await initDatabase();
+
   // Initialize session & history managers (registers IPC handlers)
   initSessionManager();
   initHistoryManager();
+  initBookmarksManager();
+  initOmniboxManager();
   initIncognitoManager();
   
   // Load privacy settings and apply
@@ -502,6 +618,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  flushDatabase();
 });
 
 // Handle uncaught exceptions gracefully

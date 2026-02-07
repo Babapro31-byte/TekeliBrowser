@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ClosedTab } from '../types/electron';
+import type { ClosedTab, SearchEngine } from '../types/electron';
+import { resolveOmniboxInput } from '../utils/omnibox';
 
 interface NewTabPageProps {
   onNavigate: (url: string) => void;
@@ -30,6 +31,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
   const [modalUrl, setModalUrl] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [recentlyClosed, setRecentlyClosed] = useState<ClosedTab[]>([]);
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>('duckduckgo');
 
   // Load quick links from localStorage
   useEffect(() => {
@@ -60,6 +62,20 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
     loadClosed();
   }, []);
 
+  // Load default search engine
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        if (!window.electron?.getSearchEngine) return;
+        const res = await window.electron.getSearchEngine();
+        if (mounted && res?.engine) setSearchEngine(res.engine);
+      } catch {}
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
   // Save quick links to localStorage
   const saveLinks = useCallback((links: QuickLink[]) => {
     setQuickLinks(links);
@@ -72,16 +88,9 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
     if (!searchQuery.trim()) return;
     
     const query = searchQuery.trim();
-    const isUrl = /^(https?:\/\/|www\.|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(query);
-    
-    if (isUrl) {
-      const url = query.startsWith('http') ? query : `https://${query}`;
-      onNavigate(url);
-    } else {
-      const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
-      onNavigate(searchUrl);
-    }
-  }, [searchQuery, onNavigate]);
+    const url = resolveOmniboxInput(query, searchEngine);
+    if (url) onNavigate(url);
+  }, [searchQuery, onNavigate, searchEngine]);
 
   const openAddModal = () => {
     setEditingLink(null);

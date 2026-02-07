@@ -1,27 +1,46 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
+import type { BookmarkEntry } from '../types/electron';
 
 interface BookmarksBarProps {
   onNavigate: (url: string) => void;
 }
 
-const bookmarks = [
-  { name: 'YouTube', url: 'https://www.youtube.com', color: 'hover:text-red-500', bg: 'hover:bg-red-500/10' },
-  { name: 'GitHub', url: 'https://www.github.com', color: 'hover:text-white', bg: 'hover:bg-white/10' },
-  { name: 'ChatGPT', url: 'https://chat.openai.com', color: 'hover:text-emerald-400', bg: 'hover:bg-emerald-500/10' },
-  { name: 'Google', url: 'https://www.google.com', color: 'hover:text-blue-400', bg: 'hover:bg-blue-500/10' },
-  { name: 'Twitter', url: 'https://twitter.com', color: 'hover:text-sky-400', bg: 'hover:bg-sky-500/10' },
-];
-
 const BookmarksBar = memo(({ onNavigate }: BookmarksBarProps) => {
+  const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        if (!window.electron?.getBookmarks) return;
+        const list = await window.electron.getBookmarks({ limit: 12 });
+        if (mounted) setBookmarks(list || []);
+      } catch {
+        if (mounted) setBookmarks([]);
+      }
+    };
+    const onChanged = () => load();
+    load();
+    window.addEventListener('bookmarks-changed', onChanged as any);
+    return () => {
+      mounted = false;
+      window.removeEventListener('bookmarks-changed', onChanged as any);
+    };
+  }, []);
+
+  if (bookmarks.length === 0) {
+    return <div className="h-9 bg-dark-surface/40 border-b border-neon-blue/10" />;
+  }
+
   return (
     <div className="h-9 bg-dark-surface/40 border-b border-neon-blue/10 flex items-center px-4 space-x-2">
       {bookmarks.map((b) => (
         <button
-          key={b.name}
+          key={b.id}
           onClick={() => onNavigate(b.url)}
-          className={`px-3 py-1 rounded-md text-xs text-white/60 ${b.color} ${b.bg} transition-colors`}
+          className="px-3 py-1 rounded-md text-xs text-white/60 hover:text-neon-blue hover:bg-neon-blue/10 transition-colors"
         >
-          {b.name}
+          {b.title || b.url}
         </button>
       ))}
     </div>

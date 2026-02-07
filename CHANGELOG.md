@@ -2,6 +2,26 @@
 
 All notable changes to TekeliBrowser will be documented in this file.
 
+## [2.0.1] - 2026-02-07
+
+### Omnibox / Bookmarks / History
+
+- Default search engine setting (DuckDuckGo / Google) + improved URL vs search detection
+- Omnibox suggestions from history + bookmarks
+- Bookmark toggle (⭐) and bookmarks bar backed by persistent DB
+
+### Persistence
+
+- Migrates old `history.json` into a persistent SQLite database (`tekeli.db`)
+
+### Ad Blocking
+
+- Adds remote hosts + EasyList-based dynamic blocking (cached under userData)
+
+### Session Restore
+
+- Fixes clean shutdown detection and prompts restore after an unclean exit
+
 ## [2.0.0] - 2025-02-07
 
 ### Privacy & Security Hardening

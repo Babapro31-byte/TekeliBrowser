@@ -329,6 +329,7 @@ const YOUTUBE_AD_REGEX = new RegExp(
 
 // Dynamic patterns from FilterManager
 let dynamicNetworkPatterns: RegExp | null = null;
+let dynamicBlockedDomains: Set<string> = new Set();
 
 // Cache for URL decisions (LRU-like behavior)
 const urlCache = new Map<string, boolean>();
@@ -347,9 +348,26 @@ export function updateDynamicPatterns(): void {
       dynamicNetworkPatterns = new RegExp(patternStr, 'i');
       console.log('[AdBlocker] Dynamic patterns updated:', patterns.length, 'patterns');
     }
+    const domains = typeof (filterManager as any).getBlockedDomains === 'function'
+      ? (filterManager as any).getBlockedDomains()
+      : [];
+    dynamicBlockedDomains = new Set(Array.isArray(domains) ? domains : []);
   } catch (error) {
     console.error('[AdBlocker] Failed to update dynamic patterns:', error);
   }
+}
+
+function isBlockedByHosts(hostname: string): boolean {
+  if (dynamicBlockedDomains.size === 0) return false;
+  let host = hostname.toLowerCase();
+  if (host.includes(':')) host = host.split(':')[0];
+  while (host) {
+    if (dynamicBlockedDomains.has(host)) return true;
+    const dot = host.indexOf('.');
+    if (dot === -1) return false;
+    host = host.slice(dot + 1);
+  }
+  return false;
 }
 
 /**
@@ -459,6 +477,11 @@ function shouldBlock(url: string): { block: boolean; category: 'youtube' | 'netw
       return { block: true, category: 'network' };
     }
   }
+
+  if (isBlockedByHosts(hostname)) {
+    cacheResult(url, true);
+    return { block: true, category: 'network' };
+  }
   
   // General ad pattern check
   if (AD_PATTERN.test(url)) {
@@ -558,8 +581,11 @@ export async function initAdBlocker(ses: Electron.Session): Promise<void> {
   
   // Periodically check for filter updates
   setInterval(async () => {
-    const updated = await filterManager.checkForUpdates();
-    if (updated) {
+    const [updated, updatedLists] = await Promise.all([
+      filterManager.checkForUpdates(),
+      (filterManager as any).checkForListUpdates?.() ?? false
+    ]);
+    if (updated || updatedLists) {
       updateDynamicPatterns();
       urlCache.clear(); // Clear cache when patterns change
       console.log('[AdBlocker] Filters updated to v' + filterManager.getVersion());
@@ -611,7 +637,7 @@ export async function forceUpdateFilters(): Promise<{ success: boolean; version:
 /**
  * Get filter manager instance for advanced usage
  */
-export function getFilterManager() {
+export function getFilterManager(): any {
   return filterManager;
 }
 

@@ -87,6 +87,19 @@ function restoreSession(): { tabs: SessionTab[]; activeTabId: string; wasCleanSh
   }
 }
 
+function markSessionDirtyOnStart(): void {
+  try {
+    const filePath = getSessionPath();
+    if (!fs.existsSync(filePath)) return;
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data: SessionData = JSON.parse(raw);
+    data.cleanShutdown = false;
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch {
+    // Ignore
+  }
+}
+
 /**
  * Track a closed tab
  */
@@ -117,10 +130,12 @@ function getRecentlyClosed(): ClosedTab[] {
  * Initialize session manager IPC handlers
  */
 export function initSessionManager(): void {
+  markSessionDirtyOnStart();
+
   // Save session
   ipcMain.handle('save-session', async (event, tabs: SessionTab[], activeTabId: string) => {
     if (!isValidSender(event)) throw new Error('Invalid sender');
-    saveSession(tabs, activeTabId, true);
+    saveSession(tabs, activeTabId, false);
     return { success: true };
   });
 

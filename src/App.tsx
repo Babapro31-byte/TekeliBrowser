@@ -10,6 +10,8 @@ import HistoryPanel from './components/HistoryPanel';
 import PermissionPrompt from './components/PermissionPrompt';
 import PrivacySettings from './components/PrivacySettings';
 import UpdateNotification from './components/UpdateNotification';
+import SessionRestorePrompt from './components/SessionRestorePrompt';
+import type { SessionData } from './types/electron';
 
 export interface Tab {
   id: string;
@@ -39,8 +41,11 @@ function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [privacySettingsOpen, setPrivacySettingsOpen] = useState(false);
   const [sessionRestored, setSessionRestored] = useState(false);
+  const [pendingSession, setPendingSession] = useState<SessionData | null>(null);
+  const [showSessionPrompt, setShowSessionPrompt] = useState(false);
   const tabsRef = useRef(tabs);
   const activeTabIdRef = useRef(activeTabId);
+  const addressBarInputRef = useRef<HTMLInputElement>(null);
 
   // Keep refs in sync
   useEffect(() => { tabsRef.current = tabs; }, [tabs]);
@@ -48,6 +53,20 @@ function App() {
 
   const activeTab = tabs.find(tab => tab.id === activeTabId);
   const secondaryTab = secondaryTabId ? tabs.find(tab => tab.id === secondaryTabId) : null;
+
+  const applyRestoredSession = useCallback((session: SessionData) => {
+    const restoredTabs: Tab[] = session.tabs.map(t => ({
+      id: t.id || Date.now().toString() + Math.random(),
+      title: t.title || 'Yeni Sekme',
+      url: t.url || DEFAULT_URL,
+      isLoading: false
+    }));
+    setTabs(restoredTabs);
+    const restoredActiveId = session.activeTabId && restoredTabs.find(t => t.id === session.activeTabId)
+      ? session.activeTabId
+      : restoredTabs[0].id;
+    setActiveTabId(restoredActiveId);
+  }, []);
 
   // --- Session Restore on mount ---
   useEffect(() => {
@@ -61,19 +80,13 @@ function App() {
         }
         const session = await window.electron.restoreSession();
         if (session && session.tabs && session.tabs.length > 0) {
-          // Session never contains incognito tabs
-          const restoredTabs: Tab[] = session.tabs.map(t => ({
-            id: t.id || Date.now().toString() + Math.random(),
-            title: t.title || 'Yeni Sekme',
-            url: t.url || DEFAULT_URL,
-            isLoading: false
-          }));
-          setTabs(restoredTabs);
-          const restoredActiveId = session.activeTabId && restoredTabs.find(t => t.id === session.activeTabId)
-            ? session.activeTabId
-            : restoredTabs[0].id;
-          setActiveTabId(restoredActiveId);
-          console.log(`[App] Restored ${restoredTabs.length} tabs`);
+          if (session.wasCleanShutdown === false) {
+            setPendingSession(session);
+            setShowSessionPrompt(true);
+          } else {
+            applyRestoredSession(session);
+            console.log(`[App] Restored ${session.tabs.length} tabs`);
+          }
         }
       } catch (err) {
         console.error('[App] Session restore failed:', err);
@@ -82,11 +95,11 @@ function App() {
     };
     
     restore();
-  }, [sessionRestored]);
+  }, [sessionRestored, applyRestoredSession]);
 
   // --- Auto-save session every 30s ---
   useEffect(() => {
-    if (!sessionRestored) return;
+    if (!sessionRestored || showSessionPrompt) return;
 
     const saveCurrentSession = () => {
       if (!window.electron?.saveSession) return;
@@ -107,7 +120,7 @@ function App() {
       clearInterval(interval);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [sessionRestored]);
+  }, [sessionRestored, showSessionPrompt]);
 
   // --- Popup redirect to new tab ---
   useEffect(() => {
@@ -145,6 +158,15 @@ function App() {
           break;
         case 'toggle-history':
           setHistoryOpen(prev => !prev);
+          break;
+        case 'focus-addressbar':
+          addressBarInputRef.current?.focus();
+          addressBarInputRef.current?.select();
+          break;
+        case 'reload':
+          window.dispatchEvent(new CustomEvent('browser-navigation', { 
+            detail: { direction: 'reload', tabId: activeTabIdRef.current } 
+          }));
           break;
         case 'next-tab': {
           const currentTabs = tabsRef.current;
@@ -293,7 +315,7 @@ function App() {
 
   const navigateTab = (direction: 'back' | 'forward' | 'reload') => {
     const event = new CustomEvent('browser-navigation', { 
-      detail: { direction, tabId: activeTabId } 
+      detail: { direction, tabId: activeTabIdRef.current } 
     });
     window.dispatchEvent(event);
   };
@@ -325,9 +347,29 @@ function App() {
       />
       
       <PermissionPrompt />
+      <SessionRestorePrompt
+        isOpen={showSessionPrompt}
+        tabCount={pendingSession?.tabs?.length || 0}
+        onRestore={() => {
+          if (pendingSession) applyRestoredSession(pendingSession);
+          setPendingSession(null);
+          setShowSessionPrompt(false);
+        }}
+        onDiscard={() => {
+          setPendingSession(null);
+          setShowSessionPrompt(false);
+          if (window.electron?.saveSession) {
+            const currentTabs = tabsRef.current
+              .filter(t => !t.isIncognito)
+              .map(t => ({ id: t.id, title: t.title, url: t.url }));
+            window.electron.saveSession(currentTabs, activeTabIdRef.current);
+          }
+        }}
+      />
       
       <AddressBar 
         currentUrl={activeTab?.url || ''}
+        currentTitle={activeTab?.title || ''}
         onNavigate={(url) => updateTabUrl(activeTabId, url)}
         onBack={() => navigateTab('back')}
         onForward={() => navigateTab('forward')}
@@ -336,6 +378,7 @@ function App() {
         splitViewActive={splitView}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onOpenPrivacySettings={() => setPrivacySettingsOpen(true)}
+        inputRef={addressBarInputRef}
       />
       
       <BookmarksBar onNavigate={(url) => updateTabUrl(activeTabId, url)} />

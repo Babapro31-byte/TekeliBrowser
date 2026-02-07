@@ -59,6 +59,28 @@ export interface HistoryQuery {
   limit?: number;
 }
 
+export type SearchEngine = 'duckduckgo' | 'google';
+
+export interface BookmarkEntry {
+  id: number;
+  url: string;
+  title: string;
+  createdAt: number;
+}
+
+export interface BookmarksQuery {
+  search?: string;
+  limit?: number;
+}
+
+export type OmniboxSuggestionKind = 'history' | 'bookmark';
+
+export interface OmniboxSuggestion {
+  kind: OmniboxSuggestionKind;
+  url: string;
+  title: string;
+}
+
 export interface IElectronAPI {
   // Window controls
   minimizeWindow: () => void;
@@ -83,6 +105,15 @@ export interface IElectronAPI {
   getHistory: (query?: HistoryQuery) => Promise<HistoryEntry[]>;
   clearHistory: (startDate?: number, endDate?: number) => Promise<{ success: boolean }>;
   deleteHistoryEntry: (url: string) => Promise<{ success: boolean }>;
+
+  // Bookmarks
+  addBookmark: (url: string, title: string) => Promise<{ success: boolean }>;
+  removeBookmark: (url: string) => Promise<{ success: boolean }>;
+  isBookmarked: (url: string) => Promise<{ bookmarked: boolean }>;
+  getBookmarks: (query?: BookmarksQuery) => Promise<BookmarkEntry[]>;
+
+  // Omnibox
+  getOmniboxSuggestions: (search: string, limit?: number) => Promise<OmniboxSuggestion[]>;
   
   // Permission prompts
   onPermissionRequest: (callback: (data: { requestId: string; site: string; permission: string; requestingUrl?: string }) => void) => () => void;
@@ -102,6 +133,8 @@ export interface IElectronAPI {
   getTrackerBlocking: () => Promise<{ enabled: boolean }>;
   setCookiePolicy: (policy: 'all' | 'block-third-party' | 'block-all') => Promise<{ success: boolean }>;
   getCookiePolicy: () => Promise<{ policy: 'all' | 'block-third-party' | 'block-all' }>;
+  setSearchEngine: (engine: SearchEngine) => Promise<{ success: boolean }>;
+  getSearchEngine: () => Promise<{ engine: SearchEngine }>;
   
   // Auto-updater
   checkForUpdates: () => Promise<{ success: boolean; updateInfo?: UpdateInfo; error?: string }>;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { SearchEngine } from '../types/electron';
 
 interface PrivacySettingsProps {
   isOpen: boolean;
@@ -20,17 +21,20 @@ const PrivacySettings = ({ isOpen, onClose }: PrivacySettingsProps) => {
   const [trackerBlocking, setTrackerBlocking] = useState(true);
   const [cookiePolicy, setCookiePolicy] = useState<CookiePolicy>('all');
   const [sitePermissions, setSitePermissions] = useState<Record<string, Record<string, 'allow' | 'block'>>>({});
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>('duckduckgo');
 
   const loadSettings = useCallback(async () => {
     try {
-      const [trackerRes, cookieRes, permsRes] = await Promise.all([
+      const [trackerRes, cookieRes, permsRes, searchRes] = await Promise.all([
         window.electron?.getTrackerBlocking?.(),
         window.electron?.getCookiePolicy?.(),
-        window.electron?.getAllPermissions?.()
+        window.electron?.getAllPermissions?.(),
+        window.electron?.getSearchEngine?.()
       ]);
       if (trackerRes?.enabled !== undefined) setTrackerBlocking(trackerRes.enabled);
       if (cookieRes?.policy) setCookiePolicy(cookieRes.policy);
       if (permsRes) setSitePermissions(permsRes);
+      if (searchRes?.engine) setSearchEngine(searchRes.engine);
     } catch (err) {
       console.error('[PrivacySettings] Load failed:', err);
     }
@@ -55,6 +59,15 @@ const PrivacySettings = ({ isOpen, onClose }: PrivacySettingsProps) => {
       setCookiePolicy(policy);
     } catch (err) {
       console.error('[PrivacySettings] Cookie policy change failed:', err);
+    }
+  };
+
+  const handleSearchEngineChange = async (engine: SearchEngine) => {
+    try {
+      await window.electron?.setSearchEngine?.(engine);
+      setSearchEngine(engine);
+    } catch (err) {
+      console.error('[PrivacySettings] Search engine change failed:', err);
     }
   };
 
@@ -127,6 +140,35 @@ const PrivacySettings = ({ isOpen, onClose }: PrivacySettingsProps) => {
                       animate={{ left: trackerBlocking ? 28 : 4 }}
                     />
                   </button>
+                </div>
+              </div>
+
+              {/* Default Search Engine */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-white/90">Varsayılan Arama Motoru</h3>
+                <div className="space-y-2">
+                  {(['duckduckgo', 'google'] as const).map((engine) => (
+                    <label
+                      key={engine}
+                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        searchEngine === engine
+                          ? 'bg-neon-blue/10 border-neon-blue/30'
+                          : 'bg-dark-bg/50 border-white/5 hover:border-white/10'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="searchEngine"
+                        checked={searchEngine === engine}
+                        onChange={() => handleSearchEngineChange(engine)}
+                        className="text-neon-blue focus:ring-neon-blue"
+                      />
+                      <span className="text-sm text-white/80">
+                        {engine === 'duckduckgo' && 'DuckDuckGo'}
+                        {engine === 'google' && 'Google'}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
 

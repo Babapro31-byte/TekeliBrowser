@@ -1,9 +1,12 @@
-import { useState, KeyboardEvent, useEffect, useRef } from 'react';
+import { useState, KeyboardEvent, useEffect, useRef, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { OmniboxSuggestion, SearchEngine } from '../types/electron';
+import { resolveOmniboxInput } from '../utils/omnibox';
 
 interface AddressBarProps {
   currentUrl: string;
+  currentTitle?: string;
   onNavigate: (url: string) => void;
   onBack: () => void;
   onForward: () => void;
@@ -12,6 +15,7 @@ interface AddressBarProps {
   splitViewActive: boolean;
   onToggleSidebar: () => void;
   onOpenPrivacySettings?: () => void;
+  inputRef?: RefObject<HTMLInputElement>;
 }
 
 // Check if URL is an internal URL
@@ -25,6 +29,7 @@ const getDisplayUrl = (url: string) => {
 
 const AddressBar = ({ 
   currentUrl, 
+  currentTitle,
   onNavigate, 
   onBack, 
   onForward, 
@@ -32,14 +37,22 @@ const AddressBar = ({
   onToggleSplitView,
   splitViewActive,
   onToggleSidebar,
-  onOpenPrivacySettings
+  onOpenPrivacySettings,
+  inputRef
 }: AddressBarProps) => {
   const [inputValue, setInputValue] = useState(getDisplayUrl(currentUrl));
   const [isFocused, setIsFocused] = useState(false);
   const [blockedAds, setBlockedAds] = useState(0);
   const [showShieldPopup, setShowShieldPopup] = useState(false);
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>('duckduckgo');
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [suggestions, setSuggestions] = useState<OmniboxSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const shieldButtonRef = useRef<HTMLButtonElement>(null);
+  const omniboxRef = useRef<HTMLDivElement>(null);
   const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+  const [suggestPosition, setSuggestPosition] = useState({ top: 0, left: 0, width: 0 });
 
   // Update popup position when opening
   const handleShieldClick = () => {
@@ -97,28 +110,129 @@ const AddressBar = ({
     };
   }, []);
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      let url = inputValue.trim();
-      
-      // Empty input - do nothing
-      if (!url) return;
-      
-      // Add protocol if missing
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        // Check if it looks like a URL
-        if (url.includes('.') && !url.includes(' ')) {
-          url = 'https://' + url;
-        } else {
-          // Treat as search query - use DuckDuckGo
-          url = `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
+  // Load default search engine
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        if (!window.electron?.getSearchEngine) return;
+        const res = await window.electron.getSearchEngine();
+        if (mounted && res?.engine) setSearchEngine(res.engine);
+      } catch {}
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const url = getDisplayUrl(currentUrl);
+        if (!url || !window.electron?.isBookmarked) {
+          if (mounted) setIsBookmarked(false);
+          return;
         }
+        const res = await window.electron.isBookmarked(url);
+        if (mounted) setIsBookmarked(!!res?.bookmarked);
+      } catch {
+        if (mounted) setIsBookmarked(false);
       }
-      
-      onNavigate(url);
-      setInputValue(url);
+    };
+    load();
+    return () => { mounted = false; };
+  }, [currentUrl]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const q = inputValue.trim();
+    if (!q) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedSuggestion(-1);
+      return;
+    }
+    if (!window.electron?.getOmniboxSuggestions) return;
+
+    const handle = setTimeout(async () => {
+      try {
+        const res = await window.electron.getOmniboxSuggestions(q, 8);
+        setSuggestions(res || []);
+        setShowSuggestions((res || []).length > 0);
+        setSelectedSuggestion(-1);
+
+        const rect = omniboxRef.current?.getBoundingClientRect();
+        if (rect) {
+          setSuggestPosition({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+        }
+      } catch {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setSelectedSuggestion(-1);
+      }
+    }, 120);
+
+    return () => clearTimeout(handle);
+  }, [inputValue, isFocused]);
+
+  const navigateTo = (url: string) => {
+    onNavigate(url);
+    setInputValue(url);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSelectedSuggestion(-1);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' && suggestions.length > 0) {
+      e.preventDefault();
+      setShowSuggestions(true);
+      setSelectedSuggestion(prev => Math.min(prev + 1, suggestions.length - 1));
+      return;
+    }
+
+    if (e.key === 'ArrowUp' && suggestions.length > 0) {
+      e.preventDefault();
+      setShowSuggestions(true);
+      setSelectedSuggestion(prev => Math.max(prev - 1, -1));
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSelectedSuggestion(-1);
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      if (selectedSuggestion >= 0 && selectedSuggestion < suggestions.length) {
+        e.preventDefault();
+        navigateTo(suggestions[selectedSuggestion].url);
+        (e.target as HTMLInputElement).blur();
+        return;
+      }
+
+      const url = resolveOmniboxInput(inputValue, searchEngine);
+      if (!url) return;
+
+      navigateTo(url);
       (e.target as HTMLInputElement).blur();
     }
+  };
+
+  const handleToggleBookmark = async () => {
+    const url = getDisplayUrl(currentUrl);
+    if (!url) return;
+    try {
+      if (isBookmarked) {
+        await window.electron?.removeBookmark?.(url);
+        setIsBookmarked(false);
+      } else {
+        await window.electron?.addBookmark?.(url, currentTitle || url);
+        setIsBookmarked(true);
+      }
+      window.dispatchEvent(new CustomEvent('bookmarks-changed'));
+    } catch {}
   };
 
   return (
@@ -254,6 +368,7 @@ const AddressBar = ({
       
       {/* Address Input (Omnibox) */}
       <motion.div 
+        ref={omniboxRef}
         className={`flex-1 h-9 rounded-full glass flex items-center px-4 transition-all ${
           isFocused ? 'neon-glow ring-2 ring-neon-blue/30' : ''
         }`}
@@ -270,21 +385,72 @@ const AddressBar = ({
         
         <input
           type="text"
+          ref={inputRef}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           onFocus={() => setIsFocused(true)}
           onBlur={() => {
-            setIsFocused(false);
-            setInputValue(getDisplayUrl(currentUrl));
+            setTimeout(() => {
+              setIsFocused(false);
+              setShowSuggestions(false);
+              setSuggestions([]);
+              setSelectedSuggestion(-1);
+              setInputValue(getDisplayUrl(currentUrl));
+            }, 120);
           }}
           placeholder="URL veya arama terimi girin..."
           className="flex-1 bg-transparent text-white/90 text-sm outline-none placeholder-white/40"
         />
       </motion.div>
+
+      {createPortal(
+        <AnimatePresence>
+          {showSuggestions && suggestions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.12 }}
+              className="fixed bg-dark-surface border border-neon-blue/20 rounded-xl overflow-hidden"
+              style={{
+                top: suggestPosition.top,
+                left: suggestPosition.left,
+                width: suggestPosition.width,
+                zIndex: 99998,
+                boxShadow: '0 0 30px rgba(0, 240, 255, 0.18), 0 8px 32px rgba(0,0,0,0.8)'
+              }}
+            >
+              {suggestions.map((s, idx) => (
+                <button
+                  key={`${s.kind}:${s.url}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    navigateTo(s.url);
+                  }}
+                  className={`w-full px-4 py-2 flex items-center justify-between text-left text-sm transition-colors ${
+                    idx === selectedSuggestion ? 'bg-neon-blue/10 text-white' : 'text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="truncate">{s.title || s.url}</span>
+                  <span className="ml-3 text-[10px] uppercase tracking-wide text-white/40">
+                    {s.kind === 'bookmark' ? 'Yer İmi' : 'Geçmiş'}
+                  </span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
       
       {/* Feature Buttons */}
       <div className="flex items-center space-x-2">
+        <FeatureButton onClick={handleToggleBookmark} title="Yer İmi" active={isBookmarked}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6">
+            <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-7-4-7 4V4z" />
+          </svg>
+        </FeatureButton>
         <FeatureButton 
           onClick={onToggleSplitView} 
           title="Bölünmüş Görünüm"

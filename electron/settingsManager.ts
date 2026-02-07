@@ -11,10 +11,12 @@ const SETTINGS_FILE = 'settings.json';
 let settingsPath = '';
 
 export type CookiePolicy = 'all' | 'block-third-party' | 'block-all';
+export type SearchEngine = 'duckduckgo' | 'google';
 
 interface Settings {
   cookiePolicy?: CookiePolicy;
   trackerBlocking?: boolean;
+  searchEngine?: SearchEngine;
 }
 
 let settings: Settings = {};
@@ -62,6 +64,15 @@ export function getTrackerBlocking(): boolean {
 
 export function setTrackerBlockingSetting(enabled: boolean): void {
   settings.trackerBlocking = enabled;
+  saveSettings();
+}
+
+export function getSearchEngine(): SearchEngine {
+  return settings.searchEngine ?? 'duckduckgo';
+}
+
+export function setSearchEngine(engine: SearchEngine): void {
+  settings.searchEngine = engine;
   saveSettings();
 }
 
