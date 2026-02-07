@@ -2,6 +2,13 @@
 
 All notable changes to TekeliBrowser will be documented in this file.
 
+## [2.0.2] - 2026-02-07
+
+### Hotfix
+
+- Fixes startup crash after auto-update when `sql-wasm.wasm` cannot be found/loaded
+- Adds extra fallback search paths for the SQLite WASM binary and copies it into `dist-electron/`
+
 ## [2.0.1] - 2026-02-07
 
 ### Omnibox / Bookmarks / History

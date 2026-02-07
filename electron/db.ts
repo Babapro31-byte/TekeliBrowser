@@ -17,47 +17,70 @@ function getDbPath(): string {
 }
 
 function locateFile(file: string): string {
-  const packaged = typeof process.resourcesPath === 'string'
-    ? path.join(process.resourcesPath, file)
-    : '';
-  if (packaged && fs.existsSync(packaged)) return packaged;
-  return path.join(app.getAppPath(), 'node_modules', 'sql.js', 'dist', file);
+  const candidates: string[] = [];
+
+  if (typeof process.resourcesPath === 'string') {
+    candidates.push(path.join(process.resourcesPath, 'sql-wasm.wasm'));
+    candidates.push(path.join(process.resourcesPath, file));
+  }
+
+  try {
+    candidates.push(path.join(app.getAppPath(), 'dist-electron', file));
+    candidates.push(path.join(app.getAppPath(), 'dist-electron', 'sql-wasm.wasm'));
+  } catch {}
+
+  candidates.push(path.join(app.getAppPath(), 'node_modules', 'sql.js', 'dist', file));
+
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) return p;
+    } catch {}
+  }
+
+  return candidates[0] || file;
 }
 
-export async function initDatabase(): Promise<void> {
-  if (db) return;
+export async function initDatabase(): Promise<boolean> {
+  if (db) return true;
+  try {
+    SQL = await initSqlJs({ locateFile });
+    const filePath = getDbPath();
+    const fileData = fs.existsSync(filePath) ? new Uint8Array(fs.readFileSync(filePath)) : undefined;
+    db = fileData ? new SQL.Database(fileData) : new SQL.Database();
 
-  SQL = await initSqlJs({ locateFile });
-  const filePath = getDbPath();
-  const fileData = fs.existsSync(filePath) ? new Uint8Array(fs.readFileSync(filePath)) : undefined;
-  db = fileData ? new SQL.Database(fileData) : new SQL.Database();
+    db.run(`
+      CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
+      CREATE TABLE IF NOT EXISTS history (
+        url TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        last_visit INTEGER NOT NULL,
+        visit_count INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE INDEX IF NOT EXISTS idx_history_last_visit ON history(last_visit DESC);
+      CREATE INDEX IF NOT EXISTS idx_history_title ON history(title);
 
-    CREATE TABLE IF NOT EXISTS history (
-      url TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      last_visit INTEGER NOT NULL,
-      visit_count INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE INDEX IF NOT EXISTS idx_history_last_visit ON history(last_visit DESC);
-    CREATE INDEX IF NOT EXISTS idx_history_title ON history(title);
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_title ON bookmarks(title);
+    `);
 
-    CREATE TABLE IF NOT EXISTS bookmarks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      url TEXT NOT NULL UNIQUE,
-      title TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_bookmarks_title ON bookmarks(title);
-  `);
-
-  flushDatabase();
+    flushDatabase();
+    return true;
+  } catch (error) {
+    console.error('[DB] Init failed:', error);
+    SQL = null;
+    db = null;
+    return false;
+  }
 }
 
 function requireDb(): Database {
@@ -81,6 +104,7 @@ export function scheduleFlush(): void {
 }
 
 export function dbRun(sql: string, params: Array<string | number> = []): void {
+  if (!db) return;
   const d = requireDb();
   const stmt = d.prepare(sql);
   try {
@@ -93,6 +117,7 @@ export function dbRun(sql: string, params: Array<string | number> = []): void {
 }
 
 export function dbGet<T extends Record<string, any>>(sql: string, params: Array<string | number> = []): T | undefined {
+  if (!db) return undefined;
   const d = requireDb();
   const stmt = d.prepare(sql);
   try {
@@ -105,6 +130,7 @@ export function dbGet<T extends Record<string, any>>(sql: string, params: Array<
 }
 
 export function dbAll<T extends Record<string, any>>(sql: string, params: Array<string | number> = []): T[] {
+  if (!db) return [];
   const d = requireDb();
   const stmt = d.prepare(sql);
   try {

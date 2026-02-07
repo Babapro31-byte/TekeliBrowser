@@ -579,7 +579,10 @@ app.whenReady().then(async () => {
   setupNavigationGuards();
   setupMainSessionCSP();
 
-  await initDatabase();
+  const dbOk = await initDatabase();
+  if (!dbOk) {
+    console.error('[TekeliBrowser] DB init failed; continuing without persistent storage');
+  }
 
   // Initialize session & history managers (registers IPC handlers)
   initSessionManager();

@@ -1,6 +1,6 @@
 {
   "name": "tekeli-browser",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Ultra-modern desktop browser with Glassmorphism and Neon design",
   "main": "dist-electron/main.js",
   "type": "module",
