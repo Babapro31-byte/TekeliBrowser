@@ -2,6 +2,14 @@
 
 All notable changes to TekeliBrowser will be documented in this file.
 
+## [2.0.3] - 2026-02-07
+
+### Hotfix
+
+- Ensures window is created before long init steps (prevents “background running, no UI”)
+- Adds single-instance lock (second launch focuses existing window)
+- Adds persistent log file at `userData/tekeli.log` for diagnosing startup issues
+
 ## [2.0.2] - 2026-02-07
 
 ### Hotfix

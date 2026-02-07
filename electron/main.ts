@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as fs from 'fs';
 import { initAdBlocker, setPrivacyUserAgent, getBlockStats, forceUpdateFilters, getFilterManager, setTrackerBlocking, isTrackerBlockingEnabled } from './adBlocker.js';
 import { generateYouTubeAdBlockerScript } from './youtubeAdBlocker.js';
 import { initAutoUpdater, checkForUpdatesOnStartup, getCurrentVersion } from './autoUpdater.js';
@@ -68,6 +69,35 @@ const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 
+function appendLog(...args: any[]): void {
+  try {
+    const line = `[${new Date().toISOString()}] ${args.map(a => {
+      try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); }
+    }).join(' ')}\n`;
+    fs.appendFileSync(path.join(app.getPath('userData'), 'tekeli.log'), line, 'utf-8');
+  } catch {}
+}
+
+const _log = console.log.bind(console);
+const _error = console.error.bind(console);
+console.log = (...args: any[]) => { _log(...args); appendLog(...args); };
+console.error = (...args: any[]) => { _error(...args); appendLog(...args); };
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
+  });
+}
+
 // Pending permission requests (requestId -> callback)
 const pendingPermissionRequests = new Map<string, (allow: boolean) => void>();
 let permissionRequestId = 0;
@@ -108,6 +138,18 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.maximize();
     mainWindow?.show();
+  });
+
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      try {
+        mainWindow.show();
+      } catch {}
+    }
+  }, 8000);
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error('[TekeliBrowser] did-fail-load', { code, desc, url });
   });
 
   // Load the app
@@ -579,11 +621,6 @@ app.whenReady().then(async () => {
   setupNavigationGuards();
   setupMainSessionCSP();
 
-  const dbOk = await initDatabase();
-  if (!dbOk) {
-    console.error('[TekeliBrowser] DB init failed; continuing without persistent storage');
-  }
-
   // Initialize session & history managers (registers IPC handlers)
   initSessionManager();
   initHistoryManager();
@@ -593,12 +630,21 @@ app.whenReady().then(async () => {
   
   // Load privacy settings and apply
   setTrackerBlocking(getTrackerBlocking());
-
-  // Initialize webview session with ad blocker (async)
-  await initializeWebviewSession();
   
-  // Create main window
+  // Create main window first to avoid "background running / no UI" if init hangs
   createWindow();
+
+  initDatabase().then((dbOk) => {
+    if (!dbOk) {
+      console.error('[TekeliBrowser] DB init failed; continuing without persistent storage');
+    }
+  }).catch((err) => {
+    console.error('[TekeliBrowser] DB init threw:', err);
+  });
+
+  initializeWebviewSession().catch((err) => {
+    console.error('[TekeliBrowser] Webview session init failed:', err);
+  });
   
   // Initialize auto-updater after window is created
   if (mainWindow) {
