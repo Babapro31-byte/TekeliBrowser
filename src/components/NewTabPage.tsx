@@ -283,83 +283,42 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
                   <radialGradient id="eSphere" cx="30%" cy="30%" r="70%">
                     <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
                     <stop offset="25%" stop-color="#e0f7ff" stop-opacity="0.95"/>
-                    <stop offset="50%" stop-color="#67e8f9" stop-opacity="0.8"/>
-                    <stop offset="75%" stop-color="#0891b2" stop-opacity="0.55"/>
+                    <stop offset="55%" stop-color="#67e8f9" stop-opacity="0.78"/>
+                    <stop offset="78%" stop-color="#0891b2" stop-opacity="0.52"/>
                     <stop offset="100%" stop-color="#032a33" stop-opacity="0.9"/>
                   </radialGradient>
-                  <filter id="eGlow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                  <filter id="cGlow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                  <filter id="eGlow"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                  <filter id="cGlow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                 </defs>
-                <style>
-                  @keyframes e1 {
-                    0%     { transform: translate(70px, 0px); }
-                    8.33%  { transform: translate(60.6px, 14px); }
-                    16.67% { transform: translate(35px, 24.2px); }
-                    25%    { transform: translate(0px, 28px); }
-                    33.33% { transform: translate(-35px, 24.2px); }
-                    41.67% { transform: translate(-60.6px, 14px); }
-                    50%    { transform: translate(-70px, 0px); }
-                    58.33% { transform: translate(-60.6px, -14px); }
-                    66.67% { transform: translate(-35px, -24.2px); }
-                    75%    { transform: translate(0px, -28px); }
-                    83.33% { transform: translate(35px, -24.2px); }
-                    91.67% { transform: translate(60.6px, -14px); }
-                    100%   { transform: translate(70px, 0px); }
-                  }
-                  @keyframes e2 {
-                    0%     { transform: translate(90px, 0px); }
-                    8.33%  { transform: translate(77.9px, 17.5px); }
-                    16.67% { transform: translate(45px, 30.3px); }
-                    25%    { transform: translate(0px, 35px); }
-                    33.33% { transform: translate(-45px, 30.3px); }
-                    41.67% { transform: translate(-77.9px, 17.5px); }
-                    50%    { transform: translate(-90px, 0px); }
-                    58.33% { transform: translate(-77.9px, -17.5px); }
-                    66.67% { transform: translate(-45px, -30.3px); }
-                    75%    { transform: translate(0px, -35px); }
-                    83.33% { transform: translate(45px, -30.3px); }
-                    91.67% { transform: translate(77.9px, -17.5px); }
-                    100%   { transform: translate(90px, 0px); }
-                  }
-                  @keyframes e3 {
-                    0%     { transform: translate(110px, 0px); }
-                    8.33%  { transform: translate(95.3px, 21px); }
-                    16.67% { transform: translate(55px, 36.4px); }
-                    25%    { transform: translate(0px, 42px); }
-                    33.33% { transform: translate(-55px, 36.4px); }
-                    41.67% { transform: translate(-95.3px, 21px); }
-                    50%    { transform: translate(-110px, 0px); }
-                    58.33% { transform: translate(-95.3px, -21px); }
-                    66.67% { transform: translate(-55px, -36.4px); }
-                    75%    { transform: translate(0px, -42px); }
-                    83.33% { transform: translate(55px, -36.4px); }
-                    91.67% { transform: translate(95.3px, -21px); }
-                    100%   { transform: translate(110px, 0px); }
-                  }
-                </style>
-
-                <!-- Orbit 1: tilted -60deg -->
-                <g transform="rotate(-60,150,150)">
-                  <ellipse cx="150" cy="150" rx="70" ry="28" fill="none" stroke="rgba(0,212,255,0.15)" stroke-width="0.8"/>
-                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e1 4s linear infinite;"/>
-                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e1 4s linear infinite; animation-delay: -2s;"/>
+                <g opacity="0.9">
+                  <g transform="rotate(0 150 150)">
+                    <ellipse cx="150" cy="150" rx="105" ry="40" fill="none" stroke="rgba(0,212,255,0.14)" stroke-width="0.9"/>
+                    <circle r="6.2" fill="url(#eSphere)" filter="url(#eGlow)">
+                      <animateMotion dur="7s" repeatCount="indefinite" path="M 255 150 A 105 40 0 1 1 45 150 A 105 40 0 1 1 255 150"/>
+                    </circle>
+                    <circle r="6.2" fill="url(#eSphere)" filter="url(#eGlow)">
+                      <animateMotion begin="-3.5s" dur="7s" repeatCount="indefinite" path="M 255 150 A 105 40 0 1 1 45 150 A 105 40 0 1 1 255 150"/>
+                    </circle>
+                  </g>
+                  <g transform="rotate(60 150 150)">
+                    <ellipse cx="150" cy="150" rx="105" ry="40" fill="none" stroke="rgba(0,212,255,0.11)" stroke-width="0.9"/>
+                    <circle r="6.2" fill="url(#eSphere)" filter="url(#eGlow)">
+                      <animateMotion begin="-1.3s" dur="7s" repeatCount="indefinite" path="M 255 150 A 105 40 0 1 1 45 150 A 105 40 0 1 1 255 150"/>
+                    </circle>
+                    <circle r="6.2" fill="url(#eSphere)" filter="url(#eGlow)">
+                      <animateMotion begin="-4.8s" dur="7s" repeatCount="indefinite" path="M 255 150 A 105 40 0 1 1 45 150 A 105 40 0 1 1 255 150"/>
+                    </circle>
+                  </g>
+                  <g transform="rotate(120 150 150)">
+                    <ellipse cx="150" cy="150" rx="105" ry="40" fill="none" stroke="rgba(0,212,255,0.09)" stroke-width="0.9"/>
+                    <circle r="6.2" fill="url(#eSphere)" filter="url(#eGlow)">
+                      <animateMotion begin="-2.6s" dur="7s" repeatCount="indefinite" path="M 255 150 A 105 40 0 1 1 45 150 A 105 40 0 1 1 255 150"/>
+                    </circle>
+                    <circle r="6.2" fill="url(#eSphere)" filter="url(#eGlow)">
+                      <animateMotion begin="-6.1s" dur="7s" repeatCount="indefinite" path="M 255 150 A 105 40 0 1 1 45 150 A 105 40 0 1 1 255 150"/>
+                    </circle>
+                  </g>
                 </g>
-
-                <!-- Orbit 2: tilted 0deg -->
-                <g>
-                  <ellipse cx="150" cy="150" rx="90" ry="35" fill="none" stroke="rgba(0,212,255,0.12)" stroke-width="0.8"/>
-                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e2 6s linear infinite;"/>
-                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e2 6s linear infinite; animation-delay: -3s;"/>
-                </g>
-
-                <!-- Orbit 3: tilted 60deg -->
-                <g transform="rotate(60,150,150)">
-                  <ellipse cx="150" cy="150" rx="110" ry="42" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="0.8"/>
-                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e3 8s linear infinite;"/>
-                  <circle cx="150" cy="150" r="8" fill="url(#eSphere)" filter="url(#eGlow)" style="animation: e3 8s linear infinite; animation-delay: -4s;"/>
-                </g>
-
-                <!-- Core sphere - static -->
                 <circle cx="150" cy="150" r="22" fill="url(#coreSphere)" filter="url(#cGlow)"/>
               </svg>
             ` }}
@@ -647,7 +606,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
       </AnimatePresence>
 
       <div className="absolute bottom-4 text-white/20 text-xs">
-        TekeliBrowser v2.1.1
+        TekeliBrowser v2.1.2
       </div>
     </div>
   );
