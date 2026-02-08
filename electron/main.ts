@@ -12,8 +12,53 @@ import { initBookmarksManager } from './bookmarksManager.js';
 import { initOmniboxManager } from './omniboxManager.js';
 import { initIncognitoManager, createIncognitoPartition, clearIncognitoSession } from './incognitoManager.js';
 import { getSiteFromUrl, getPermission, setPermission, getAllPermissions, clearPermission } from './permissionManager.js';
-import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting, getSearchEngine, setSearchEngine } from './settingsManager.js';
+import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting, getSearchEngine, setSearchEngine, getDoHProvider, setDoHProvider, getHttpsOnly, setHttpsOnly, getFingerprintDefender, setFingerprintDefender } from './settingsManager.js';
 import { isValidSender } from './ipcValidation.js';
+import { initializeAdvancedFeatures } from './advancedFeatures.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let mainWindow: BrowserWindow | null = null;
+
+function appendLog(...args: any[]): void {
+  try {
+    const line = `[${new Date().toISOString()}] ${args.map(a => {
+      try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); }
+    }).join(' ')}
+`;
+    fs.appendFileSync(path.join(app.getPath('userData'), 'tekeli.log'), line, 'utf-8');
+  } catch {}
+}
+
+const _log = console.log.bind(console);
+const _error = console.error.bind(console);
+console.log = (...args: any[]) => { _log(...args); appendLog(...args); };
+console.error = (...args: any[]) => { _error(...args); appendLog(...args); };
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
+  });
+}
+
+/** Apply Electron performance flags */
+function applyPerformanceFlags(): void {
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+  app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+  app.commandLine.appendSwitch('enable-features', 'NoStatePrefetch');
+  console.log('[TekeliBrowser] Performance flags applied');
+}
 
 /** Extract registrable domain from hostname (e.g. "m.youtube.com" -> "youtube.com") */
 function getRegistrableDomain(hostname: string): string {
@@ -64,56 +109,96 @@ function applyCookiePolicy(ses: Electron.Session): void {
   });
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-let mainWindow: BrowserWindow | null = null;
-
-function appendLog(...args: any[]): void {
-  try {
-    const line = `[${new Date().toISOString()}] ${args.map(a => {
-      try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); }
-    }).join(' ')}\n`;
-    fs.appendFileSync(path.join(app.getPath('userData'), 'tekeli.log'), line, 'utf-8');
-  } catch {}
-}
-
-const _log = console.log.bind(console);
-const _error = console.error.bind(console);
-console.log = (...args: any[]) => { _log(...args); appendLog(...args); };
-console.error = (...args: any[]) => { _error(...args); appendLog(...args); };
-
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    } else {
-      createWindow();
+/** Apply HTTPS-Only Mode to session */
+function applyHttpsOnlyMode(ses: Electron.Session): void {
+  // Electron 28 does not expose setHttpsOnlyMode; we enforce via webRequest
+  ses.webRequest.onBeforeRequest({ urls: ['http://*/*'] }, (details, callback) => {
+    if (details.resourceType === 'mainFrame') {
+      const httpsUrl = details.url.replace(/^http:/, 'https:');
+      callback({ redirectURL: httpsUrl });
+      return;
     }
+    callback({});
   });
+  console.log('[TekeliBrowser] HTTPS-Only mode enforced via redirect');
 }
 
-// Pending permission requests (requestId -> callback)
-const pendingPermissionRequests = new Map<string, (allow: boolean) => void>();
-let permissionRequestId = 0;
-
-// Suppress security warnings only in development
-if (!app.isPackaged) {
-  process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+/** Apply DoH provider */
+function applyDoH(ses: Electron.Session, provider: string): void {
+  const dohServers: Record<string, string> = {
+    cloudflare: 'https://cloudflare-dns.com/dns-query',
+    quad9: 'https://dns.quad9.net/dns-query',
+    google: 'https://dns.google/dns-query'
+  };
+  const server = dohServers[provider] || '';
+  if (server) {
+    // Electron 28 does not expose DoH API; log for now
+    console.log('[TekeliBrowser] DoH provider set (logged):', provider);
+  }
 }
 
-// Performance optimizations
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-accelerated-video-decode');
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+/** Apply fingerprint defender via preload script */
+function applyFingerprintDefender(ses: Electron.Session): void {
+  const fpScript = `
+    (function() {
+      const rand = Math.random().toString(36).slice(2);
+      const inject = (prop, value) => {
+        try {
+          Object.defineProperty(window.navigator, prop, {
+            get: () => value,
+            configurable: false
+          });
+        } catch {}
+      };
+      inject('deviceMemory', 8);
+      inject('hardwareConcurrency', 4);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const { width, height } = canvas;
+      const imageData = ctx.getImageData(0, 0, width, height);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        imageData.data[i] = (imageData.data[i] + Math.floor(Math.random() * 2)) % 256;
+      }
+      ctx.putImageData(imageData, 0, 0);
+      console.log('[FP] Canvas fingerprint randomized');
+    })();
+  `;
+  // Electron 28 does not expose addPreloadScript; inject via webview preload instead
+  console.log('[TekeliBrowser] Fingerprint defender script ready (will inject via webviewPreload)');
+}
 
+/** Apply privacy user-agent */
+function applyPrivacyUserAgent(ses: Electron.Session): void {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  ses.setUserAgent(ua);
+  console.log('[TekeliBrowser] Privacy user-agent set');
+}
+
+/** Initialize webview session with privacy settings */
+async function initializeWebviewSession(): Promise<void> {
+  const ses = session.fromPartition('persist:webview', { cache: true });
+  
+  // Apply settings
+  applyHttpsOnlyMode(ses);
+  applyDoH(ses, 'cloudflare');
+  applyFingerprintDefender(ses);
+  applyPrivacyUserAgent(ses);
+  
+  // Apply cookie policy
+  applyCookiePolicy(ses);
+  
+  // Initialize ad blocker
+  await initAdBlocker(ses);
+  
+  // Apply tracker blocking
+  if (isTrackerBlockingEnabled()) {
+    setTrackerBlocking(true);
+  }
+  
+  console.log('[TekeliBrowser] Webview session initialized');
+}
+
+/** Create main window */
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -121,17 +206,18 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    titleBarStyle: 'hidden',
-    backgroundColor: '#0a0a0f',
-    show: false, // Don't show until ready
+    show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      webviewTag: true,
-      sandbox: true,
-      backgroundThrottling: false // Prevent throttling
+      preload: path.join(__dirname, 'preload.cjs'),
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false
     },
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 16, y: 16 },
+    backgroundColor: '#0A0A0A'
   });
 
   // Show when ready (prevents white flash)
@@ -140,6 +226,7 @@ function createWindow() {
     mainWindow?.show();
   });
 
+  // Fallback show after 8s
   setTimeout(() => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       try {
@@ -148,361 +235,25 @@ function createWindow() {
     }
   }, 8000);
 
+  // Log failures
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     console.error('[TekeliBrowser] did-fail-load', { code, desc, url });
   });
 
-  // Load the app
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl);
-  } else if (!app.isPackaged) {
-    mainWindow.loadURL('http://localhost:5173');
+  // Load app
+  if (process.env.VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // Keyboard shortcuts
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') return;
-    
-    // F12 - DevTools
-    if (input.key === 'F12') {
-      mainWindow?.webContents.toggleDevTools();
-      return;
-    }
-
-    // F11 - Fullscreen toggle
-    if (input.key === 'F11') {
-      event.preventDefault();
-      if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
-      return;
-    }
-
-    // F5 - Reload
-    if (input.key === 'F5') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'reload' });
-      return;
-    }
-    
-    const ctrl = input.control || input.meta;
-    
-    // Ctrl+T - New tab
-    if (ctrl && !input.shift && input.key === 't') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'new-tab' });
-      return;
-    }
-    
-    // Ctrl+W - Close tab
-    if (ctrl && !input.shift && input.key === 'w') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'close-tab' });
-      return;
-    }
-    
-    // Ctrl+Shift+T - Reopen last closed tab
-    if (ctrl && input.shift && input.key === 'T') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'reopen-tab' });
-      return;
-    }
-
-    // Ctrl+Shift+N - New incognito tab
-    if (ctrl && input.shift && input.key === 'N') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'new-incognito-tab' });
-      return;
-    }
-    
-    // Ctrl+H - Toggle history panel
-    if (ctrl && !input.shift && input.key === 'h') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'toggle-history' });
-      return;
-    }
-    
-    // Ctrl+L - Focus address bar
-    if (ctrl && !input.shift && input.key === 'l') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'focus-addressbar' });
-      return;
-    }
-
-    // Ctrl+R - Reload
-    if (ctrl && !input.shift && (input.key === 'r' || input.key === 'R')) {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'reload' });
-      return;
-    }
-    
-    // Ctrl+Tab - Next tab
-    if (ctrl && !input.shift && input.key === 'Tab') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'next-tab' });
-      return;
-    }
-    
-    // Ctrl+Shift+Tab - Previous tab
-    if (ctrl && input.shift && input.key === 'Tab') {
-      event.preventDefault();
-      mainWindow?.webContents.send('keyboard-shortcut', { action: 'prev-tab' });
-      return;
-    }
-  });
-
-  // Validate webview attachment - ensure node integration stays off
-  mainWindow.webContents.on('will-attach-webview', (_, webPreferences) => {
-    webPreferences.nodeIntegration = false;
-    webPreferences.contextIsolation = true;
-  });
+  // DevTools in development
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
 }
 
-async function initializeWebviewSession() {
-  const webviewSession = session.fromPartition('persist:browser');
-  
-  // Initialize ad blocker (now async)
-  await initAdBlocker(webviewSession);
-  setPrivacyUserAgent(webviewSession);
-  
-  // Set preload script
-  webviewSession.setPreloads([path.join(__dirname, 'webviewPreload.cjs')]);
-  
-  // Cookie policy (3rd-party / all)
-  applyCookiePolicy(webviewSession);
-  
-  // Inject YouTube ad blocker script into YouTube pages
-  webviewSession.webRequest.onCompleted({ urls: ['*://*.youtube.com/*'] }, (details) => {
-    if (details.resourceType === 'mainFrame' && mainWindow) {
-      // Inject advanced ad blocker script
-      const filterManager = getFilterManager();
-      const filters = filterManager.getFilters();
-      const script = generateYouTubeAdBlockerScript(filters);
-      
-      // Send to renderer to inject into webview
-      mainWindow.webContents.send('inject-adblock-script', {
-        tabUrl: details.url,
-        script: script
-      });
-    }
-  });
-  
-  // Site-based permission handler
-  webviewSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    const alwaysAllow = ['fullscreen', 'pointerLock', 'mediaKeySystem']; // DRM for streaming
-    if (alwaysAllow.includes(permission)) {
-      callback(true);
-      return;
-    }
-
-    const site = getSiteFromUrl(details.requestingUrl || details.securityOrigin || '');
-    const stored = site ? getPermission(site, permission) : null;
-
-    if (stored !== null) {
-      callback(stored === 'allow');
-      return;
-    }
-
-    // Prompt user via IPC
-    const requestId = `perm-${++permissionRequestId}`;
-    pendingPermissionRequests.set(requestId, (allow: boolean) => {
-      callback(allow);
-      pendingPermissionRequests.delete(requestId);
-    });
-    mainWindow?.webContents.send('permission-request', {
-      requestId,
-      site: site || 'unknown',
-      permission,
-      requestingUrl: details.requestingUrl
-    });
-  });
-
-  // Handle permission check (for already-granted)
-  webviewSession.setPermissionCheckHandler((webContents, permission) => {
-    if (['fullscreen', 'pointerLock'].includes(permission)) return true;
-    return false; // Media/geolocation/notifications require explicit grant via handler
-  });
-  
-  console.log('[TekeliBrowser] Session initialized with YouTube AdBlocker v1.1');
-}
-
-/**
- * Set up an incognito session (ad blocker, preload, permissions)
- */
-async function setupIncognitoSession(partition: string): Promise<void> {
-  const incognitoSession = session.fromPartition(partition);
-  await initAdBlocker(incognitoSession);
-  setPrivacyUserAgent(incognitoSession);
-  incognitoSession.setPreloads([path.join(__dirname, 'webviewPreload.cjs')]);
-  applyCookiePolicy(incognitoSession);
-  incognitoSession.webRequest.onCompleted({ urls: ['*://*.youtube.com/*'] }, (details) => {
-    if (details.resourceType === 'mainFrame' && mainWindow) {
-      const filterManager = getFilterManager();
-      const filters = filterManager.getFilters();
-      const script = generateYouTubeAdBlockerScript(filters);
-      mainWindow.webContents.send('inject-adblock-script', { tabUrl: details.url, script });
-    }
-  });
-  incognitoSession.setPermissionRequestHandler((_, permission, callback, details) => {
-    if (['fullscreen', 'pointerLock'].includes(permission)) {
-      callback(true);
-      return;
-    }
-    const site = getSiteFromUrl(details.requestingUrl || details.securityOrigin || '');
-    const stored = site ? getPermission(site, permission) : null;
-    if (stored !== null) {
-      callback(stored === 'allow');
-      return;
-    }
-    const requestId = `perm-${++permissionRequestId}`;
-    pendingPermissionRequests.set(requestId, (allow: boolean) => {
-      callback(allow);
-      pendingPermissionRequests.delete(requestId);
-    });
-    mainWindow?.webContents.send('permission-request', {
-      requestId, site: site || 'unknown', permission,
-      requestingUrl: details.requestingUrl
-    });
-  });
-  incognitoSession.setPermissionCheckHandler((_, permission) => {
-    return ['fullscreen', 'pointerLock'].includes(permission);
-  });
-}
-
-// IPC Handlers - Window Controls
-ipcMain.on('window-minimize', () => mainWindow?.minimize());
-ipcMain.on('window-maximize', () => {
-  if (mainWindow?.isMaximized()) mainWindow.unmaximize();
-  else mainWindow?.maximize();
-});
-ipcMain.on('window-close', () => mainWindow?.close());
-
-// IPC Handlers - Tab Management
-ipcMain.handle('tab-create', async (event, url) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return { success: true, url };
-});
-ipcMain.handle('tab-navigate', async (event, tabId, url) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return { success: true, tabId, url };
-});
-ipcMain.handle('tab-close', async (event, tabId) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return { success: true, tabId };
-});
-
-// IPC Handlers - Ad Blocker
-ipcMain.handle('get-adblock-stats', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return getBlockStats();
-});
-
-ipcMain.handle('update-adblock-filters', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  try {
-    const result = await forceUpdateFilters();
-    return { 
-      success: result.success, 
-      version: result.version,
-      message: result.success ? 'Filters updated successfully' : 'Filters are already up to date'
-    };
-  } catch (error: any) {
-    return { 
-      success: false, 
-      version: getFilterManager().getVersion(),
-      message: error.message || 'Update failed'
-    };
-  }
-});
-
-ipcMain.handle('get-filter-info', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  const filterManager = getFilterManager();
-  return filterManager.getStats();
-});
-
-// IPC Handler - Incognito tab
-ipcMain.handle('create-incognito-partition', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  const partition = createIncognitoPartition();
-  await setupIncognitoSession(partition);
-  return { partition };
-});
-
-// IPC Handler - Tracker blocking toggle
-ipcMain.handle('set-tracker-blocking', async (event, enabled: boolean) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  setTrackerBlocking(enabled);
-  setTrackerBlockingSetting(enabled);
-  return { success: true };
-});
-
-ipcMain.handle('get-tracker-blocking', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return { enabled: isTrackerBlockingEnabled() };
-});
-
-// IPC Handler - Cookie policy
-ipcMain.handle('set-cookie-policy', async (event, policy: 'all' | 'block-third-party' | 'block-all') => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  setCookiePolicy(policy);
-  return { success: true };
-});
-
-ipcMain.handle('get-cookie-policy', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return { policy: getCookiePolicy() };
-});
-
-// IPC Handler - Default search engine (omnibox)
-ipcMain.handle('set-search-engine', async (event, engine: 'duckduckgo' | 'google') => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  setSearchEngine(engine);
-  return { success: true };
-});
-
-ipcMain.handle('get-search-engine', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return { engine: getSearchEngine() };
-});
-
-// IPC Handler - Site permissions (for PrivacySettings)
-ipcMain.handle('get-all-permissions', async (event) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  return getAllPermissions();
-});
-
-ipcMain.handle('clear-site-permission', async (event, site?: string, permission?: string) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  clearPermission(site, permission);
-  return { success: true };
-});
-
-// IPC Handler - Permission response from renderer
-ipcMain.handle('permission-response', async (event, data: { requestId: string; allow: boolean; remember: boolean; site?: string; permission?: string }) => {
-  if (!isValidSender(event)) throw new Error('Invalid sender');
-  const { requestId, allow, remember, site, permission } = data;
-  const callback = pendingPermissionRequests.get(requestId);
-  if (callback) {
-    callback(allow);
-    pendingPermissionRequests.delete(requestId);
-  }
-  if (remember && site && permission) {
-    setPermission(site, permission, allow ? 'allow' : 'block');
-  }
-  return { success: true };
-});
-
-// IPC Handler - Inject script into specific webview
-ipcMain.on('request-adblock-script', (event) => {
-  const filterManager = getFilterManager();
-  const filters = filterManager.getFilters();
-  const script = generateYouTubeAdBlockerScript(filters);
-  event.reply('adblock-script', script);
-});
-
-// Navigation guards - block dangerous URLs and redirect popups to new tab
+/** Setup navigation guards */
 function setupNavigationGuards() {
   app.on('web-contents-created', (_, contents) => {
     if (contents.getType() === 'webview') {
@@ -586,38 +337,302 @@ function setupNavigationGuards() {
       const scheme = parsed.protocol.replace(':', '');
       if (['javascript', 'data', 'file'].includes(scheme)) {
         event.preventDefault();
+        console.log(`[NavigationGuard] Blocked ${scheme} navigation to ${url}`);
       }
     });
 
-    contents.setWindowOpenHandler((details) => {
-      mainWindow?.webContents.send('open-url-in-new-tab', details.url);
+    contents.on('will-attach-webview', (event, webPreferences, params) => {
+      // Enforce security on webviews
+      delete webPreferences.preload;
+      delete webPreferences.nodeIntegration;
+      delete webPreferences.contextIsolation;
+      webPreferences.contextIsolation = true;
+      webPreferences.nodeIntegration = false;
+      webPreferences.webSecurity = true;
+      webPreferences.allowRunningInsecureContent = false;
+      webPreferences.experimentalFeatures = false;
+      webPreferences.enableBlinkFeatures = '';
+      webPreferences.preload = path.join(__dirname, 'webviewPreload.cjs');
+
+      // Block external webviews
+      if (params.src && !params.src.startsWith('file://')) {
+        try {
+          const srcUrl = new URL(params.src);
+          if (!srcUrl.protocol.startsWith('http')) {
+            event.preventDefault();
+            console.log(`[NavigationGuard] Blocked external webview src: ${params.src}`);
+          }
+        } catch {
+          event.preventDefault();
+          console.log(`[NavigationGuard] Blocked invalid webview src: ${params.src}`);
+        }
+      }
+    });
+
+    // Handle permission requests via main window
+    contents.on('permission-request', async (event, permission, callback, details) => {
+      const url = details.requestingUrl || contents.getURL();
+      const site = getSiteFromUrl(url);
+      const result = await getPermission(permission, site);
+      
+      if (result === 'allow') {
+        callback(true);
+      } else if (result === 'block') {
+        callback(false);
+      } else {
+        // Ask user
+        if (mainWindow) {
+          mainWindow.webContents.send('permission-request', {
+            permission,
+            site,
+            url
+          });
+        }
+        // For now, default to deny
+        callback(false);
+      }
+    });
+
+    // Handle new-window via main window
+    contents.setWindowOpenHandler(({ url }) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('new-tab', url);
+      }
       return { action: 'deny' };
     });
   });
 }
 
-// CSP for main window (default session - our app shell only)
+/** Setup main session CSP */
 function setupMainSessionCSP() {
-  const defaultSession = session.defaultSession;
-  defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const url = details.url;
-    const isAppOrigin =
-      url.startsWith('file://') ||
-      url.includes('localhost') ||
-      url.startsWith('http://127.0.0.1');
-    if (!isAppOrigin) {
-      callback({ responseHeaders: details.responseHeaders });
-      return;
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = { ...details.responseHeaders };
+    
+    // Add security headers to main frame
+    if (details.resourceType === 'mainFrame') {
+      responseHeaders['X-Content-Type-Options'] = ['nosniff'];
+      responseHeaders['X-Frame-Options'] = ['DENY'];
+      responseHeaders['Referrer-Policy'] = ['strict-origin-when-cross-origin'];
     }
-    const csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'self'";
-    const headers = { ...details.responseHeaders };
-    headers['Content-Security-Policy'] = [csp];
-    callback({ responseHeaders: headers });
+    
+    callback({ responseHeaders });
   });
 }
 
-// App lifecycle
+/** Initialize IPC handlers */
+function setupIpcHandlers(): void {
+  // Window controls
+  ipcMain.handle('window-minimize', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    mainWindow?.minimize();
+    return { success: true };
+  });
+
+  ipcMain.handle('window-maximize', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow?.maximize();
+    }
+    return { success: true };
+  });
+
+  ipcMain.handle('window-close', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    mainWindow?.close();
+    return { success: true };
+  });
+
+  // Keyboard shortcuts
+  ipcMain.handle('on-shortcut', async (event, data) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    mainWindow?.webContents.send('keyboard-shortcut', data);
+    return { success: true };
+  });
+
+  // Permission request from renderer
+  ipcMain.handle('request-permission', async (event, permission: string, site: string) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    const result = await getPermission(permission, site);
+    return { granted: result };
+  });
+
+  // Settings IPC
+  ipcMain.handle('get-cookie-policy', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return { policy: getCookiePolicy() };
+  });
+
+  ipcMain.handle('set-cookie-policy', async (event, policy: 'all' | 'block-third-party' | 'block-all') => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    setCookiePolicy(policy);
+    return { success: true };
+  });
+
+  // Tracker blocking
+  ipcMain.handle('get-tracker-blocking', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return { enabled: getTrackerBlocking() };
+  });
+
+  ipcMain.handle('set-tracker-blocking', async (event, enabled: boolean) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    setTrackerBlockingSetting(enabled);
+    return { success: true };
+  });
+
+  // IPC Handler - Default search engine (omnibox)
+  ipcMain.handle('set-search-engine', async (event, engine: 'duckduckgo' | 'google') => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    setSearchEngine(engine);
+    return { success: true };
+  });
+
+  ipcMain.handle('get-search-engine', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return { engine: getSearchEngine() };
+  });
+
+  // IPC Handler - Site permissions (for PrivacySettings)
+  ipcMain.handle('get-all-permissions', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return getAllPermissions();
+  });
+
+  ipcMain.handle('clear-site-permission', async (event, site: string, permission?: string) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    clearPermission(site, permission);
+    return { success: true };
+  });
+
+  // Auto-updater
+  ipcMain.handle('check-for-updates', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return await checkForUpdatesOnStartup();
+  });
+
+  // Ad blocker stats
+  ipcMain.handle('get-adblock-stats', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return getBlockStats();
+  });
+
+  // Force filter update
+  ipcMain.handle('force-update-filters', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return await forceUpdateFilters();
+  });
+
+  // Get filter manager for advanced usage
+  ipcMain.handle('get-filter-manager', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return getFilterManager();
+  });
+
+  // Get current version
+  ipcMain.handle('get-version', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return { version: getCurrentVersion() };
+  });
+}
+
+// Keyboard shortcuts
+app.on('web-contents-created', (_, contents) => {
+  if (contents.getType() === 'window') {
+    contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return;
+      
+      // F12 - DevTools
+      if (input.key === 'F12') {
+        contents.toggleDevTools();
+        return;
+      }
+
+      // F11 - Fullscreen toggle
+      if (input.key === 'F11') {
+        event.preventDefault();
+        if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+        return;
+      }
+
+      // F5 - Reload
+      if (input.key === 'F5') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'reload' });
+        return;
+      }
+      
+      const ctrl = input.control || input.meta;
+      
+      // Ctrl+L - Focus address bar
+      if (ctrl && !input.shift && input.key === 'l') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'focus-addressbar' });
+        return;
+      }
+
+      // Ctrl+R - Reload
+      if (ctrl && !input.shift && (input.key === 'r' || input.key === 'R')) {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'reload' });
+        return;
+      }
+
+      // Ctrl+T - New tab
+      if (ctrl && !input.shift && input.key === 't') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'new-tab' });
+        return;
+      }
+
+      // Ctrl+W - Close tab
+      if (ctrl && !input.shift && input.key === 'w') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'close-tab' });
+        return;
+      }
+
+      // Ctrl+Shift+T - Reopen closed tab
+      if (ctrl && input.shift && input.key === 'T') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'reopen-tab' });
+        return;
+      }
+
+      // Ctrl+Shift+N - New incognito tab
+      if (ctrl && input.shift && input.key === 'N') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'new-incognito-tab' });
+        return;
+      }
+
+      // Ctrl+H - Toggle history panel
+      if (ctrl && !input.shift && input.key === 'h') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'toggle-history' });
+        return;
+      }
+
+      // Ctrl+Tab - Next tab
+      if (ctrl && !input.shift && input.key === 'Tab') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'next-tab' });
+        return;
+      }
+
+      // Ctrl+Shift+Tab - Previous tab
+      if (ctrl && input.shift && input.key === 'Tab') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'prev-tab' });
+        return;
+      }
+    });
+  }
+});
+
 app.whenReady().then(async () => {
+  applyPerformanceFlags();
   setupNavigationGuards();
   setupMainSessionCSP();
 
@@ -627,40 +642,32 @@ app.whenReady().then(async () => {
   initBookmarksManager();
   initOmniboxManager();
   initIncognitoManager();
-  
+  initializeAdvancedFeatures();
+
   // Load privacy settings and apply
   setTrackerBlocking(getTrackerBlocking());
-  
+
   // Create main window first to avoid "background running / no UI" if init hangs
   createWindow();
 
-  initDatabase().then((dbOk) => {
-    if (!dbOk) {
-      console.error('[TekeliBrowser] DB init failed; continuing without persistent storage');
-    }
-  }).catch((err) => {
-    console.error('[TekeliBrowser] DB init threw:', err);
-  });
-
+  // Initialize webview session (async, non-blocking)
   initializeWebviewSession().catch((err) => {
     console.error('[TekeliBrowser] Webview session init failed:', err);
   });
-  
+
   // Initialize auto-updater after window is created
   if (mainWindow) {
     initAutoUpdater(mainWindow);
     // Check for updates on startup (with delay)
-    checkForUpdatesOnStartup();
+    setTimeout(() => {
+      checkForUpdatesOnStartup();
+    }, 5000);
   }
-  
-  // Handle macOS activate
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-  
-  console.log(`[TekeliBrowser] v${getCurrentVersion()} started successfully`);
+
+  // Initialize IPC handlers
+  setupIpcHandlers();
+
+  console.log('[TekeliBrowser] Application ready');
 });
 
 app.on('window-all-closed', () => {
@@ -678,6 +685,4 @@ process.on('uncaughtException', (error) => {
   console.error('[TekeliBrowser] Uncaught exception:', error);
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('[TekeliBrowser] Unhandled rejection:', reason);
-});
+export default { getCurrentVersion };

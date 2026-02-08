@@ -1,6 +1,6 @@
 {
   "name": "tekeli-browser",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "description": "Ultra-modern desktop browser with Glassmorphism and Neon design",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -9,7 +9,9 @@
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
     "electron:dev": "vite",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "perf": "node scripts/perf.js",
+    "privacy": "node scripts/privacy.js"
   },
   "keywords": [
     "electron",
@@ -36,6 +38,7 @@
     "concurrently": "^8.2.2",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
+    "lighthouse": "^12.1.0",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
@@ -47,12 +50,16 @@
   "build": {
     "appId": "com.tekeli.browser",
     "productName": "TekeliBrowser",
+    "buildVersion": "2.1.0",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/sql.js/dist/sql-wasm.wasm"
     ],
     "extraResources": [
       {
@@ -67,13 +74,36 @@
       "releaseType": "release"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "extraFiles": [
+        {
+          "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+          "to": "resources/sql-wasm.wasm"
+        }
+      ]
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "extraFiles": [
+        {
+          "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+          "to": "Resources/sql-wasm.wasm"
+        }
+      ]
     },
     "linux": {
-      "target": "AppImage"
-    }
+      "target": "AppImage",
+      "extraFiles": [
+        {
+          "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+          "to": "resources/sql-wasm.wasm"
+        }
+      ]
+    },
+    "electronDist": "node_modules/.cache/electron/dist",
+    "electronVersion": "28.2.0",
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false
   }
 }
