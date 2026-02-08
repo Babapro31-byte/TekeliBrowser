@@ -369,30 +369,6 @@ function setupNavigationGuards() {
       }
     });
 
-    // Handle permission requests via main window
-    contents.on('permission-request', async (event, permission, callback, details) => {
-      const url = details.requestingUrl || contents.getURL();
-      const site = getSiteFromUrl(url);
-      const result = await getPermission(permission, site);
-      
-      if (result === 'allow') {
-        callback(true);
-      } else if (result === 'block') {
-        callback(false);
-      } else {
-        // Ask user
-        if (mainWindow) {
-          mainWindow.webContents.send('permission-request', {
-            permission,
-            site,
-            url
-          });
-        }
-        // For now, default to deny
-        callback(false);
-      }
-    });
-
     // Handle new-window via main window
     contents.setWindowOpenHandler(({ url }) => {
       if (mainWindow) {
@@ -400,6 +376,30 @@ function setupNavigationGuards() {
       }
       return { action: 'deny' };
     });
+  });
+}
+
+function setupPermissionHandler(): void {
+  const webviewSession = session.fromPartition('persist:webview', { cache: true });
+
+  webviewSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const url = details.requestingUrl || webContents.getURL();
+    const site = getSiteFromUrl(url);
+    const decision = getPermission(site, permission);
+
+    if (decision === 'allow') {
+      callback(true);
+      return;
+    }
+    if (decision === 'block') {
+      callback(false);
+      return;
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('permission-request', { permission, site, url });
+    }
+    callback(false);
   });
 }
 
@@ -454,7 +454,7 @@ function setupIpcHandlers(): void {
   // Permission request from renderer
   ipcMain.handle('request-permission', async (event, permission: string, site: string) => {
     if (!isValidSender(event)) throw new Error('Invalid sender');
-    const result = await getPermission(permission, site);
+    const result = getPermission(site, permission);
     return { granted: result };
   });
 
@@ -634,6 +634,7 @@ app.on('web-contents-created', (_, contents) => {
 app.whenReady().then(async () => {
   applyPerformanceFlags();
   setupNavigationGuards();
+  setupPermissionHandler();
   setupMainSessionCSP();
 
   // Initialize session & history managers (registers IPC handlers)
