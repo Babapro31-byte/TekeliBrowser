@@ -28,3 +28,8 @@ release
 
 # Electron
 out/
+
+# Vercel
+.vercel
+.vercelignore
+vercel.json
