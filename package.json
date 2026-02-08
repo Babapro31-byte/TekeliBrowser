@@ -100,8 +100,6 @@
         }
       ]
     },
-    "electronDist": "node_modules/.cache/electron/dist",
-    "electronVersion": "28.2.0",
     "npmRebuild": false,
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false
