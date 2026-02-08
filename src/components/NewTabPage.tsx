@@ -162,6 +162,17 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
     window.location.reload();
   };
 
+  const handleAddQuickLinkFromMenu = () => {
+    setContextMenu(null);
+    openAddModal();
+  };
+
+  const handleViewSourceFromMenu = () => {
+    setContextMenu(null);
+    const href = window.location.href;
+    onNavigate(href.startsWith('view-source:') ? href : `view-source:${href}`);
+  };
+
   return (
     <div 
       className="w-full h-full bg-dark-bg flex flex-col items-center justify-center relative overflow-hidden"
@@ -611,7 +622,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
               Sayfayi Yenile
             </button>
             <button
-              onClick={() => setContextMenu(null)}
+              onClick={handleAddQuickLinkFromMenu}
               className="w-full px-4 py-2.5 text-left text-sm text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-400">
@@ -621,7 +632,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
             </button>
             <div className="mx-3 my-1 h-px bg-white/10" />
             <button
-              onClick={() => setContextMenu(null)}
+              onClick={handleViewSourceFromMenu}
               className="w-full px-4 py-2.5 text-left text-sm text-white/80 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/40">
@@ -636,7 +647,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
       </AnimatePresence>
 
       <div className="absolute bottom-4 text-white/20 text-xs">
-        TekeliBrowser v1.2
+        TekeliBrowser v2.1.1
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, Menu, clipboard } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as fs from 'fs';
@@ -20,6 +20,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+
+const pendingPermissionRequests = new Map<
+  string,
+  { callback: (allow: boolean) => void; site: string; permission: string; url: string }
+>();
 
 function appendLog(...args: any[]): void {
   try {
@@ -372,9 +377,95 @@ function setupNavigationGuards() {
     // Handle new-window via main window
     contents.setWindowOpenHandler(({ url }) => {
       if (mainWindow) {
-        mainWindow.webContents.send('new-tab', url);
+        mainWindow.webContents.send('open-url-in-new-tab', url);
       }
       return { action: 'deny' };
+    });
+
+    contents.on('context-menu', (_event, params) => {
+      if (contents.getType() !== 'webview') return;
+
+      const template: Electron.MenuItemConstructorOptions[] = [];
+
+      const pageUrl = params.pageURL || contents.getURL();
+      const hasHttpPage = /^https?:\/\//i.test(pageUrl);
+
+      template.push(
+        {
+          label: 'Geri',
+          enabled: contents.canGoBack(),
+          click: () => contents.goBack()
+        },
+        {
+          label: 'İleri',
+          enabled: contents.canGoForward(),
+          click: () => contents.goForward()
+        },
+        { type: 'separator' },
+        { label: 'Yenile', click: () => contents.reload() }
+      );
+
+      if (params.linkURL) {
+        template.push(
+          { type: 'separator' },
+          {
+            label: 'Linki Yeni Sekmede Aç',
+            click: () => {
+              if (mainWindow) mainWindow.webContents.send('open-url-in-new-tab', params.linkURL);
+            }
+          },
+          {
+            label: 'Linki Kopyala',
+            click: () => clipboard.writeText(params.linkURL)
+          }
+        );
+      }
+
+      if (params.selectionText) {
+        template.push(
+          { type: 'separator' },
+          {
+            label: 'Kopyala',
+            role: 'copy'
+          }
+        );
+      }
+
+      if (params.isEditable) {
+        template.push(
+          { type: 'separator' },
+          { label: 'Kes', role: 'cut' },
+          { label: 'Kopyala', role: 'copy' },
+          { label: 'Yapıştır', role: 'paste' }
+        );
+      }
+
+      template.push(
+        { type: 'separator' },
+        {
+          label: 'Kaynak Kodunu Gör',
+          enabled: hasHttpPage,
+          click: () => {
+            if (!mainWindow) return;
+            const sourceUrl = pageUrl.startsWith('view-source:') ? pageUrl : `view-source:${pageUrl}`;
+            mainWindow.webContents.send('open-url-in-new-tab', sourceUrl);
+          }
+        },
+        {
+          label: 'İncele',
+          click: () => {
+            try {
+              contents.inspectElement(params.x, params.y);
+              if (!contents.isDevToolsOpened()) {
+                contents.openDevTools({ mode: 'detach' });
+              }
+            } catch {}
+          }
+        }
+      );
+
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup({ window: BrowserWindow.fromWebContents(contents) ?? undefined });
     });
   });
 }
@@ -397,7 +488,17 @@ function setupPermissionHandler(): void {
     }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('permission-request', { permission, site, url });
+      const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      pendingPermissionRequests.set(requestId, { callback, site, permission, url });
+      setTimeout(() => {
+        const pending = pendingPermissionRequests.get(requestId);
+        if (!pending) return;
+        pending.callback(false);
+        pendingPermissionRequests.delete(requestId);
+      }, 15000);
+
+      mainWindow.webContents.send('permission-request', { requestId, permission, site, requestingUrl: url });
+      return;
     }
     callback(false);
   });
@@ -422,6 +523,25 @@ function setupMainSessionCSP() {
 /** Initialize IPC handlers */
 function setupIpcHandlers(): void {
   // Window controls
+  ipcMain.on('window-minimize', (event) => {
+    if (!isValidSender(event)) return;
+    mainWindow?.minimize();
+  });
+
+  ipcMain.on('window-maximize', (event) => {
+    if (!isValidSender(event)) return;
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow?.maximize();
+    }
+  });
+
+  ipcMain.on('window-close', (event) => {
+    if (!isValidSender(event)) return;
+    mainWindow?.close();
+  });
+
   ipcMain.handle('window-minimize', async (event) => {
     if (!isValidSender(event)) throw new Error('Invalid sender');
     mainWindow?.minimize();
@@ -503,6 +623,20 @@ function setupIpcHandlers(): void {
   ipcMain.handle('clear-site-permission', async (event, site: string, permission?: string) => {
     if (!isValidSender(event)) throw new Error('Invalid sender');
     clearPermission(site, permission);
+    return { success: true };
+  });
+
+  ipcMain.handle('permission-response', async (event, data: { requestId: string; allow: boolean; remember?: boolean; site?: string; permission?: string }) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    const pending = pendingPermissionRequests.get(data.requestId);
+    if (!pending) return { success: false };
+
+    if (data.remember) {
+      setPermission(pending.site, pending.permission, data.allow ? 'allow' : 'block');
+    }
+
+    pending.callback(Boolean(data.allow));
+    pendingPermissionRequests.delete(data.requestId);
     return { success: true };
   });
 
