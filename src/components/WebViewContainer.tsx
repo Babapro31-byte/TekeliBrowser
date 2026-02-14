@@ -141,7 +141,7 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
   }
 
   // Show webview for regular URLs
-  const partition = tab.isIncognito && tab.partition ? tab.partition : 'persist:browser';
+  const partition = tab.isIncognito && tab.partition ? tab.partition : 'persist:webview';
   return (
     <div className="w-full h-full bg-dark-bg">
       <webview
