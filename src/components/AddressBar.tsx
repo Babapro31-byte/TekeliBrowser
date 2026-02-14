@@ -13,7 +13,6 @@ interface AddressBarProps {
   onReload: () => void;
   onToggleSplitView: () => void;
   splitViewActive: boolean;
-  onToggleSidebar: () => void;
   onOpenPrivacySettings?: () => void;
   inputRef?: RefObject<HTMLInputElement>;
 }
@@ -36,7 +35,6 @@ const AddressBar = ({
   onReload,
   onToggleSplitView,
   splitViewActive,
-  onToggleSidebar,
   onOpenPrivacySettings,
   inputRef
 }: AddressBarProps) => {
@@ -459,13 +457,6 @@ const AddressBar = ({
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="2" y="3" width="6" height="12" />
             <rect x="10" y="3" width="6" height="12" />
-          </svg>
-        </FeatureButton>
-        
-        <FeatureButton onClick={onToggleSidebar} title="AI Asistan">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="9" cy="6" r="3" />
-            <path d="M3 16C3 13.2386 5.23858 11 8 11H10C12.7614 11 15 13.2386 15 16" />
           </svg>
         </FeatureButton>
       </div>

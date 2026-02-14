@@ -31,6 +31,9 @@ export interface SessionTab {
   id: string;
   title: string;
   url: string;
+  resume?: {
+    youtubeSeconds?: number;
+  };
 }
 
 export interface SessionData {

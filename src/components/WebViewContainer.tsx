@@ -16,6 +16,7 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
   const isReadyRef = useRef(false);
   const lastTitleRef = useRef('');
+  const mediaPollIntervalRef = useRef<number | null>(null);
 
   // Check if this is the new tab page
   const isNewTabPage = tab.url === NEWTAB_URL;
@@ -32,6 +33,29 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
 
     const onDomReady = () => {
       isReadyRef.current = true;
+
+      if (mediaPollIntervalRef.current) {
+        window.clearInterval(mediaPollIntervalRef.current);
+        mediaPollIntervalRef.current = null;
+      }
+
+      const wv: any = webview;
+      mediaPollIntervalRef.current = window.setInterval(async () => {
+        try {
+          const currentUrl = wv.getURL?.() || '';
+          if (!currentUrl) return;
+          const isYoutube = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch|youtu\.be\/)/i.test(currentUrl);
+          if (!isYoutube) return;
+
+          const seconds = await wv.executeJavaScript(
+            `(() => { try { const v = document.querySelector('video'); return v ? v.currentTime : null; } catch { return null; } })()`,
+            true
+          );
+          if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return;
+
+          window.dispatchEvent(new CustomEvent('tab-media-state', { detail: { tabId: tab.id, url: currentUrl, seconds } }));
+        } catch {}
+      }, 3000);
     };
 
     const onTitleUpdated = (e: any) => {
@@ -58,6 +82,12 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
       }
     };
 
+    const onDidNavigate = (e: any) => {
+      const url = e?.url;
+      if (typeof url !== 'string' || !url) return;
+      onNavigate?.(url);
+    };
+
     const onNavigation = (e: any) => {
       if (!isReadyRef.current || e.detail?.tabId !== tab.id) return;
       
@@ -74,16 +104,25 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
     webview.addEventListener('dom-ready', onDomReady);
     webview.addEventListener('page-title-updated', onTitleUpdated);
     webview.addEventListener('did-finish-load', onDidFinishLoad);
+    webview.addEventListener('did-navigate', onDidNavigate as any);
+    webview.addEventListener('did-navigate-in-page', onDidNavigate as any);
     window.addEventListener('browser-navigation', onNavigation);
 
     return () => {
       webview.removeEventListener('dom-ready', onDomReady);
       webview.removeEventListener('page-title-updated', onTitleUpdated);
       webview.removeEventListener('did-finish-load', onDidFinishLoad);
+      webview.removeEventListener('did-navigate', onDidNavigate as any);
+      webview.removeEventListener('did-navigate-in-page', onDidNavigate as any);
       window.removeEventListener('browser-navigation', onNavigation);
       isReadyRef.current = false;
+
+      if (mediaPollIntervalRef.current) {
+        window.clearInterval(mediaPollIntervalRef.current);
+        mediaPollIntervalRef.current = null;
+      }
     };
-  }, [tab.id, tab.url, onTitleUpdate, isNewTabPage]);
+  }, [tab.id, tab.url, onTitleUpdate, onNavigate, isNewTabPage]);
 
   // Handle navigation from NewTabPage
   const handleNewTabNavigate = (url: string) => {

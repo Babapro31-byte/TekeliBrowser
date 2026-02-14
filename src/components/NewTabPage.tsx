@@ -606,7 +606,7 @@ const NewTabPage = ({ onNavigate }: NewTabPageProps) => {
       </AnimatePresence>
 
       <div className="absolute bottom-4 text-white/20 text-xs">
-        TekeliBrowser v2.1.2
+        TekeliBrowser v2.1.3
       </div>
     </div>
   );

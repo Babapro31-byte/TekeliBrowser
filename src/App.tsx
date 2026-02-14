@@ -5,12 +5,10 @@ import TabBar from './components/TabBar';
 import AddressBar from './components/AddressBar';
 import BookmarksBar from './components/BookmarksBar';
 import WebViewContainer from './components/WebViewContainer';
-import AISidebar from './components/AISidebar';
 import HistoryPanel from './components/HistoryPanel';
 import PermissionPrompt from './components/PermissionPrompt';
 import PrivacySettings from './components/PrivacySettings';
 import UpdateNotification from './components/UpdateNotification';
-import SessionRestorePrompt from './components/SessionRestorePrompt';
 import type { SessionData } from './types/electron';
 
 export interface Tab {
@@ -37,14 +35,12 @@ function App() {
   const [activeTabId, setActiveTabId] = useState<string>('1');
   const [splitView, setSplitView] = useState(false);
   const [secondaryTabId, setSecondaryTabId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [privacySettingsOpen, setPrivacySettingsOpen] = useState(false);
   const [sessionRestored, setSessionRestored] = useState(false);
-  const [pendingSession, setPendingSession] = useState<SessionData | null>(null);
-  const [showSessionPrompt, setShowSessionPrompt] = useState(false);
   const tabsRef = useRef(tabs);
   const activeTabIdRef = useRef(activeTabId);
+  const mediaStateRef = useRef<Record<string, { url: string; seconds: number }>>({});
   const addressBarInputRef = useRef<HTMLInputElement>(null);
 
   // Keep refs in sync
@@ -53,6 +49,22 @@ function App() {
 
   const activeTab = tabs.find(tab => tab.id === activeTabId);
   const secondaryTab = secondaryTabId ? tabs.find(tab => tab.id === secondaryTabId) : null;
+
+  const applyYouTubeResumeTime = (url: string, seconds?: number) => {
+    if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return url;
+    if (!/^https?:\/\//i.test(url)) return url;
+    if (!/^(https?:\/\/)?(www\.)?(youtube\.com\/watch|youtu\.be\/)/i.test(url)) return url;
+
+    try {
+      const u = new URL(url);
+      u.searchParams.delete('t');
+      u.searchParams.delete('start');
+      u.searchParams.set('t', `${Math.floor(seconds)}s`);
+      return u.toString();
+    } catch {
+      return url;
+    }
+  };
 
   const applyRestoredSession = useCallback((session: SessionData) => {
     const restoredTabs: Tab[] = session.tabs.map(t => ({
@@ -80,13 +92,8 @@ function App() {
         }
         const session = await window.electron.restoreSession();
         if (session && session.tabs && session.tabs.length > 0) {
-          if (session.wasCleanShutdown === false) {
-            setPendingSession(session);
-            setShowSessionPrompt(true);
-          } else {
-            applyRestoredSession(session);
-            console.log(`[App] Restored ${session.tabs.length} tabs`);
-          }
+          applyRestoredSession(session);
+          console.log(`[App] Restored ${session.tabs.length} tabs`);
         }
       } catch (err) {
         console.error('[App] Session restore failed:', err);
@@ -99,14 +106,19 @@ function App() {
 
   // --- Auto-save session every 30s ---
   useEffect(() => {
-    if (!sessionRestored || showSessionPrompt) return;
+    if (!sessionRestored) return;
 
     const saveCurrentSession = () => {
       if (!window.electron?.saveSession) return;
       // Exclude incognito tabs from session restore
       const currentTabs = tabsRef.current
         .filter(t => !t.isIncognito)
-        .map(t => ({ id: t.id, title: t.title, url: t.url }));
+        .map(t => {
+          const media = mediaStateRef.current[t.id];
+          const baseUrl = media?.url || t.url;
+          const url = applyYouTubeResumeTime(baseUrl, media?.seconds);
+          return { id: t.id, title: t.title, url, resume: media?.seconds ? { youtubeSeconds: Math.floor(media.seconds) } : undefined };
+        });
       window.electron.saveSession(currentTabs, activeTabIdRef.current);
     };
 
@@ -120,7 +132,20 @@ function App() {
       clearInterval(interval);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [sessionRestored, showSessionPrompt]);
+  }, [sessionRestored]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent;
+      const detail = ce.detail as any;
+      if (!detail || typeof detail.tabId !== 'string') return;
+      if (typeof detail.url !== 'string' || !detail.url) return;
+      if (typeof detail.seconds !== 'number' || !Number.isFinite(detail.seconds)) return;
+      mediaStateRef.current[detail.tabId] = { url: detail.url, seconds: detail.seconds };
+    };
+    window.addEventListener('tab-media-state', handler as any);
+    return () => window.removeEventListener('tab-media-state', handler as any);
+  }, []);
 
   // --- Popup redirect to new tab ---
   useEffect(() => {
@@ -347,25 +372,6 @@ function App() {
       />
       
       <PermissionPrompt />
-      <SessionRestorePrompt
-        isOpen={showSessionPrompt}
-        tabCount={pendingSession?.tabs?.length || 0}
-        onRestore={() => {
-          if (pendingSession) applyRestoredSession(pendingSession);
-          setPendingSession(null);
-          setShowSessionPrompt(false);
-        }}
-        onDiscard={() => {
-          setPendingSession(null);
-          setShowSessionPrompt(false);
-          if (window.electron?.saveSession) {
-            const currentTabs = tabsRef.current
-              .filter(t => !t.isIncognito)
-              .map(t => ({ id: t.id, title: t.title, url: t.url }));
-            window.electron.saveSession(currentTabs, activeTabIdRef.current);
-          }
-        }}
-      />
       
       <AddressBar 
         currentUrl={activeTab?.url || ''}
@@ -376,7 +382,6 @@ function App() {
         onReload={() => navigateTab('reload')}
         onToggleSplitView={toggleSplitView}
         splitViewActive={splitView}
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onOpenPrivacySettings={() => setPrivacySettingsOpen(true)}
         inputRef={addressBarInputRef}
       />
@@ -416,8 +421,6 @@ function App() {
             )}
           </AnimatePresence>
         </div>
-        
-        <AISidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         
         <HistoryPanel 
           isOpen={historyOpen} 
