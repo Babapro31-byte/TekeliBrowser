@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, session, Menu, clipboard } from 'electron'
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as fs from 'fs';
+import { ElectronBlocker } from '@ghostery/adblocker-electron';
+import fetch from 'cross-fetch';
 import { initAdBlocker, setPrivacyUserAgent, getBlockStats, forceUpdateFilters, getFilterManager, setTrackerBlocking, isTrackerBlockingEnabled } from './adBlocker.js';
 import { generateYouTubeAdBlockerScript } from './youtubeAdBlocker.js';
 import { initAutoUpdater, checkForUpdatesOnStartup, getCurrentVersion } from './autoUpdater.js';
@@ -20,6 +22,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+let ghosteryBlocker: ElectronBlocker | null = null;
+let ghosteryBlockedCount = 0;
 
 const pendingPermissionRequests = new Map<
   string,
@@ -76,6 +80,29 @@ function getUniqueSavePath(initialPath: string): string {
 function emitDownloadUpdated(record: DownloadRecord): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('download-updated', record);
+}
+
+async function initGhosteryAdBlocker(): Promise<void> {
+  if (ghosteryBlocker) return;
+
+  const blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
+  const originalOnBeforeRequest = blocker.onBeforeRequest.bind(blocker);
+  blocker.onBeforeRequest = (details, callback) => {
+    originalOnBeforeRequest(details, (response) => {
+      if (response.cancel) {
+        ghosteryBlockedCount += 1;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('tracker-blocked', { count: ghosteryBlockedCount });
+        }
+      }
+      callback(response);
+    });
+  };
+
+  ghosteryBlocker = blocker;
+  blocker.enableBlockingInSession(session.defaultSession);
+  blocker.enableBlockingInSession(session.fromPartition('persist:webview', { cache: true }));
+  console.log('[TekeliBrowser] Ghostery adblocker enabled');
 }
 
 function setupDownloads(): void {
@@ -762,6 +789,11 @@ function setupIpcHandlers(): void {
     return getBlockStats();
   });
 
+  ipcMain.handle('get-tracker-blocked-count', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return { count: ghosteryBlockedCount };
+  });
+
   // Force filter update
   ipcMain.handle('force-update-filters', async (event) => {
     if (!isValidSender(event)) throw new Error('Invalid sender');
@@ -954,6 +986,10 @@ app.whenReady().then(async () => {
 
   // Create main window first to avoid "background running / no UI" if init hangs
   createWindow();
+
+  initGhosteryAdBlocker().catch((err) => {
+    console.error('[TekeliBrowser] Ghostery adblocker init failed:', err);
+  });
 
   // Initialize webview session (async, non-blocking)
   initializeWebviewSession().catch((err) => {

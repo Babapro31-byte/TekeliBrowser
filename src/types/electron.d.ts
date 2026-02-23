@@ -147,6 +147,8 @@ export interface IElectronAPI {
   
   // Ad blocker
   getAdBlockStats: () => Promise<AdBlockStats>;
+  getTrackerBlockedCount: () => Promise<{ count: number }>;
+  onTrackerBlocked: (callback: (count?: number) => void) => () => void;
   setTrackerBlocking: (enabled: boolean) => Promise<{ success: boolean }>;
   getTrackerBlocking: () => Promise<{ enabled: boolean }>;
   setCookiePolicy: (policy: 'all' | 'block-third-party' | 'block-all') => Promise<{ success: boolean }>;

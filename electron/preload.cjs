@@ -15,12 +15,18 @@ contextBridge.exposeInMainWorld('electron', {
   
   // Ad blocker
   getAdBlockStats: () => ipcRenderer.invoke('get-adblock-stats'),
+  getTrackerBlockedCount: () => ipcRenderer.invoke('get-tracker-blocked-count'),
   setTrackerBlocking: (enabled) => ipcRenderer.invoke('set-tracker-blocking', enabled),
   getTrackerBlocking: () => ipcRenderer.invoke('get-tracker-blocking'),
   setCookiePolicy: (policy) => ipcRenderer.invoke('set-cookie-policy', policy),
   getCookiePolicy: () => ipcRenderer.invoke('get-cookie-policy'),
   setSearchEngine: (engine) => ipcRenderer.invoke('set-search-engine', engine),
   getSearchEngine: () => ipcRenderer.invoke('get-search-engine'),
+  onTrackerBlocked: (callback) => {
+    const handler = (_, data) => callback(data?.count);
+    ipcRenderer.on('tracker-blocked', handler);
+    return () => ipcRenderer.removeListener('tracker-blocked', handler);
+  },
   
   // Auto-updater
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
