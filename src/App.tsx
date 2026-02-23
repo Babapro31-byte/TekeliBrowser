@@ -22,6 +22,7 @@ export interface Tab {
 
 // Default URL for new tabs
 const DEFAULT_URL = 'tekeli://newtab';
+const DOWNLOADS_URL = 'tekeli://downloads';
 
 function App() {
   const [tabs, setTabs] = useState<Tab[]>([
@@ -345,6 +346,22 @@ function App() {
     window.dispatchEvent(event);
   };
 
+  const openDownloadsTab = useCallback(() => {
+    const existing = tabsRef.current.find(t => t.url === DOWNLOADS_URL && !t.isIncognito);
+    if (existing) {
+      setActiveTabId(existing.id);
+      return;
+    }
+    const newTab: Tab = {
+      id: Date.now().toString(),
+      title: 'İndirmeler',
+      url: DOWNLOADS_URL,
+      isLoading: false
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+  }, []);
+
   return (
     <div className="w-full h-screen bg-dark-bg flex flex-col overflow-hidden">
       {/* Auto-updater notification */}
@@ -383,6 +400,7 @@ function App() {
         onToggleSplitView={toggleSplitView}
         splitViewActive={splitView}
         onOpenPrivacySettings={() => setPrivacySettingsOpen(true)}
+        onOpenDownloads={openDownloadsTab}
         inputRef={addressBarInputRef}
       />
       

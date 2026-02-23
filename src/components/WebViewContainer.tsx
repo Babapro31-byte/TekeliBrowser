@@ -1,9 +1,11 @@
 import { useEffect, useRef, memo } from 'react';
 import type { Tab } from '../App';
 import NewTabPage from './NewTabPage';
+import DownloadsPage from './DownloadsPage';
 
 // Special internal URLs
 const NEWTAB_URL = 'tekeli://newtab';
+const DOWNLOADS_URL = 'tekeli://downloads';
 
 interface WebViewContainerProps {
   tab: Tab;
@@ -20,11 +22,16 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
 
   // Check if this is the new tab page
   const isNewTabPage = tab.url === NEWTAB_URL;
+  const isDownloadsPage = tab.url === DOWNLOADS_URL;
 
   useEffect(() => {
     // Set title for new tab page
     if (isNewTabPage) {
       onTitleUpdate('Yeni Sekme');
+      return;
+    }
+    if (isDownloadsPage) {
+      onTitleUpdate('İndirmeler');
       return;
     }
 
@@ -122,7 +129,7 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
         mediaPollIntervalRef.current = null;
       }
     };
-  }, [tab.id, tab.url, onTitleUpdate, onNavigate, isNewTabPage]);
+  }, [tab.id, tab.url, onTitleUpdate, onNavigate, isNewTabPage, isDownloadsPage]);
 
   // Handle navigation from NewTabPage
   const handleNewTabNavigate = (url: string) => {
@@ -136,6 +143,13 @@ const WebViewContainer = memo(({ tab, onTitleUpdate, onNavigate }: WebViewContai
     return (
       <div className="w-full h-full">
         <NewTabPage onNavigate={handleNewTabNavigate} />
+      </div>
+    );
+  }
+  if (isDownloadsPage) {
+    return (
+      <div className="w-full h-full">
+        <DownloadsPage />
       </div>
     );
   }

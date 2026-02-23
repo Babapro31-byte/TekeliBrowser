@@ -40,35 +40,39 @@ function copyPreloadFiles(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [
-    react(),
-    electron([
-      {
-        entry: 'electron/main.ts',
-        vite: {
-          build: {
-            outDir: 'dist-electron',
-            rollupOptions: {
-              external: ['electron']
-            }
-          },
-          plugins: [copyPreloadFiles()]
-        }
-      },
-      {
-        entry: 'electron/adBlocker.ts',
-        vite: {
-          build: {
-            outDir: 'dist-electron',
-            rollupOptions: {
-              external: ['electron']
+  plugins: (() => {
+    const rendererOnly = process.env.TEKELI_RENDERER_ONLY === '1';
+    if (rendererOnly) return [react()];
+    return [
+      react(),
+      electron([
+        {
+          entry: 'electron/main.ts',
+          vite: {
+            build: {
+              outDir: 'dist-electron',
+              rollupOptions: {
+                external: ['electron']
+              }
+            },
+            plugins: [copyPreloadFiles()]
+          }
+        },
+        {
+          entry: 'electron/adBlocker.ts',
+          vite: {
+            build: {
+              outDir: 'dist-electron',
+              rollupOptions: {
+                external: ['electron']
+              }
             }
           }
         }
-      }
-    ]),
-    renderer()
-  ],
+      ]),
+      renderer()
+    ];
+  })(),
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')

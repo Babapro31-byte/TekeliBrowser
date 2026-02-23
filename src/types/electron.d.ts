@@ -27,6 +27,21 @@ export interface UpdateState {
   currentVersion: string;
 }
 
+export type DownloadState = 'starting' | 'progressing' | 'completed' | 'cancelled' | 'interrupted';
+
+export interface DownloadRecord {
+  id: string;
+  url: string;
+  filename: string;
+  savePath: string;
+  receivedBytes: number;
+  totalBytes: number;
+  state: DownloadState;
+  startedAt: number;
+  completedAt?: number;
+  error?: string;
+}
+
 export interface SessionTab {
   id: string;
   title: string;
@@ -145,6 +160,10 @@ export interface IElectronAPI {
   installUpdate: () => Promise<{ success: boolean; error?: string }>;
   getUpdateState: () => Promise<UpdateState>;
   cancelUpdateDownload: () => Promise<{ success: boolean; error?: string }>;
+
+  startDownload: (url: string) => Promise<{ success: boolean; id?: string; error?: string }>;
+  getDownloads: () => Promise<DownloadRecord[]>;
+  onDownloadUpdated: (callback: (data: DownloadRecord) => void) => () => void;
   
   // Update event listeners (returns cleanup function)
   onUpdateChecking: (callback: () => void) => () => void;

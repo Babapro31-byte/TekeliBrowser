@@ -14,6 +14,7 @@ interface AddressBarProps {
   onToggleSplitView: () => void;
   splitViewActive: boolean;
   onOpenPrivacySettings?: () => void;
+  onOpenDownloads?: () => void;
   inputRef?: RefObject<HTMLInputElement>;
 }
 
@@ -36,6 +37,7 @@ const AddressBar = ({
   onToggleSplitView,
   splitViewActive,
   onOpenPrivacySettings,
+  onOpenDownloads,
   inputRef
 }: AddressBarProps) => {
   const [inputValue, setInputValue] = useState(getDisplayUrl(currentUrl));
@@ -449,6 +451,15 @@ const AddressBar = ({
             <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-7-4-7 4V4z" />
           </svg>
         </FeatureButton>
+        {onOpenDownloads && (
+          <FeatureButton onClick={onOpenDownloads} title="İndirmeler">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M12 3v10" />
+              <path d="M8 11l4 4 4-4" />
+              <path d="M4 17v3h16v-3" />
+            </svg>
+          </FeatureButton>
+        )}
         <FeatureButton 
           onClick={onToggleSplitView} 
           title="Bölünmüş Görünüm"

@@ -26,6 +26,25 @@ const pendingPermissionRequests = new Map<
   { callback: (allow: boolean) => void; site: string; permission: string; url: string }
 >();
 
+type DownloadState = 'starting' | 'progressing' | 'completed' | 'cancelled' | 'interrupted';
+
+type DownloadRecord = {
+  id: string;
+  url: string;
+  filename: string;
+  savePath: string;
+  receivedBytes: number;
+  totalBytes: number;
+  state: DownloadState;
+  startedAt: number;
+  completedAt?: number;
+  error?: string;
+};
+
+const downloadRecords = new Map<string, DownloadRecord>();
+const pendingDownloadIdsByUrl = new Map<string, string[]>();
+const lastDownloadEmit = new Map<string, { at: number; bytes: number; state: DownloadState }>();
+
 function appendLog(...args: any[]): void {
   try {
     const line = `[${new Date().toISOString()}] ${args.map(a => {
@@ -40,6 +59,96 @@ const _log = console.log.bind(console);
 const _error = console.error.bind(console);
 console.log = (...args: any[]) => { _log(...args); appendLog(...args); };
 console.error = (...args: any[]) => { _error(...args); appendLog(...args); };
+
+function getUniqueSavePath(initialPath: string): string {
+  const dir = path.dirname(initialPath);
+  const ext = path.extname(initialPath);
+  const base = path.basename(initialPath, ext);
+  let candidate = initialPath;
+  let i = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(dir, `${base} (${i})${ext}`);
+    i += 1;
+  }
+  return candidate;
+}
+
+function emitDownloadUpdated(record: DownloadRecord): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('download-updated', record);
+}
+
+function setupDownloads(): void {
+  session.defaultSession.on('will-download', (_event, item) => {
+    const url = item.getURL();
+
+    const queue = pendingDownloadIdsByUrl.get(url);
+    const id = queue && queue.length > 0 ? queue.shift()! : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (queue && queue.length === 0) pendingDownloadIdsByUrl.delete(url);
+
+    const downloadsDir = app.getPath('downloads');
+    const filename = path.basename(item.getFilename() || 'download');
+    const savePath = getUniqueSavePath(path.join(downloadsDir, filename));
+    item.setSavePath(savePath);
+
+    const existing = downloadRecords.get(id);
+    const startedAt = existing?.startedAt || Date.now();
+    const record: DownloadRecord = {
+      id,
+      url,
+      filename,
+      savePath,
+      receivedBytes: item.getReceivedBytes(),
+      totalBytes: item.getTotalBytes(),
+      state: 'progressing',
+      startedAt
+    };
+    downloadRecords.set(id, record);
+    emitDownloadUpdated(record);
+
+    item.on('updated', () => {
+      const current = downloadRecords.get(id);
+      if (!current) return;
+
+      const next: DownloadRecord = {
+        ...current,
+        receivedBytes: item.getReceivedBytes(),
+        totalBytes: item.getTotalBytes(),
+        state: item.isPaused() ? current.state : 'progressing'
+      };
+      downloadRecords.set(id, next);
+
+      const last = lastDownloadEmit.get(id);
+      const now = Date.now();
+      const shouldEmit = !last || next.state !== last.state || (now - last.at) > 250 || (next.receivedBytes - last.bytes) > 256 * 1024;
+      if (shouldEmit) {
+        lastDownloadEmit.set(id, { at: now, bytes: next.receivedBytes, state: next.state });
+        emitDownloadUpdated(next);
+      }
+    });
+
+    item.once('done', (_e, state) => {
+      const current = downloadRecords.get(id);
+      if (!current) return;
+
+      const finalState: DownloadState =
+        state === 'completed' ? 'completed' :
+        state === 'cancelled' ? 'cancelled' :
+        'interrupted';
+
+      const next: DownloadRecord = {
+        ...current,
+        receivedBytes: item.getReceivedBytes(),
+        totalBytes: item.getTotalBytes(),
+        state: finalState,
+        completedAt: Date.now()
+      };
+      downloadRecords.set(id, next);
+      lastDownloadEmit.set(id, { at: Date.now(), bytes: next.receivedBytes, state: next.state });
+      emitDownloadUpdated(next);
+    });
+  });
+}
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -670,6 +779,65 @@ function setupIpcHandlers(): void {
     if (!isValidSender(event)) throw new Error('Invalid sender');
     return { version: getCurrentVersion() };
   });
+
+  ipcMain.handle('download-start', async (event, url: string) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    if (!mainWindow || mainWindow.isDestroyed()) return { success: false, error: 'Window not ready' };
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { success: false, error: 'Invalid URL' };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { success: false, error: 'Only http/https supported' };
+    }
+
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const existingQueue = pendingDownloadIdsByUrl.get(url) || [];
+    existingQueue.push(id);
+    pendingDownloadIdsByUrl.set(url, existingQueue);
+
+    const record: DownloadRecord = {
+      id,
+      url,
+      filename: '',
+      savePath: '',
+      receivedBytes: 0,
+      totalBytes: -1,
+      state: 'starting',
+      startedAt: Date.now()
+    };
+    downloadRecords.set(id, record);
+    emitDownloadUpdated(record);
+
+    try {
+      mainWindow.webContents.downloadURL(url);
+    } catch (e: any) {
+      const next: DownloadRecord = { ...record, state: 'interrupted', completedAt: Date.now(), error: String(e?.message || e) };
+      downloadRecords.set(id, next);
+      emitDownloadUpdated(next);
+      return { success: false, error: next.error };
+    }
+
+    setTimeout(() => {
+      const cur = downloadRecords.get(id);
+      if (!cur) return;
+      if (cur.state === 'starting') {
+        const next: DownloadRecord = { ...cur, state: 'interrupted', completedAt: Date.now(), error: 'Download did not start' };
+        downloadRecords.set(id, next);
+        emitDownloadUpdated(next);
+      }
+    }, 10000);
+
+    return { success: true, id };
+  });
+
+  ipcMain.handle('download-list', async (event) => {
+    if (!isValidSender(event)) throw new Error('Invalid sender');
+    return Array.from(downloadRecords.values()).sort((a, b) => b.startedAt - a.startedAt);
+  });
 }
 
 // Keyboard shortcuts
@@ -771,6 +939,7 @@ app.whenReady().then(async () => {
   setupNavigationGuards();
   setupPermissionHandler();
   setupMainSessionCSP();
+  setupDownloads();
 
   // Initialize session & history managers (registers IPC handlers)
   initSessionManager();

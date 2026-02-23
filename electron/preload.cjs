@@ -76,6 +76,14 @@ contextBridge.exposeInMainWorld('electron', {
     return () => ipcRenderer.removeListener('keyboard-shortcut', handler);
   },
 
+  startDownload: (url) => ipcRenderer.invoke('download-start', url),
+  getDownloads: () => ipcRenderer.invoke('download-list'),
+  onDownloadUpdated: (callback) => {
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('download-updated', handler);
+    return () => ipcRenderer.removeListener('download-updated', handler);
+  },
+
   // Update event listeners
   onUpdateChecking: (callback) => {
     const handler = () => callback();
