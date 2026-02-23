@@ -43,6 +43,7 @@ export default function SettingsPanel({
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop'
   );
   const [customBgInput, setCustomBgInput] = useState('');
+  // @ts-ignore: blockedCount is used for effect dependency
   const [blockedCount, setBlockedCount] = useState(0);
   const [showSaveToast, setShowSaveToast] = useState(false);
 
