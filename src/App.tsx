@@ -10,6 +10,7 @@ import PermissionPrompt from './components/PermissionPrompt';
 import PrivacySettings from './components/PrivacySettings';
 import UpdateNotification from './components/UpdateNotification';
 import SettingsPanel, { type ThemeColor, type PrivacyLevel, type ThemeId } from './components/SettingsPanel';
+import Sidebar from './components/Sidebar';
 import { getThemes, colorClasses } from './utils/themes';
 import type { SessionData } from './types/electron';
 
@@ -41,6 +42,7 @@ function App() {
   const [secondaryTabId, setSecondaryTabId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [privacySettingsOpen, setPrivacySettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionRestored, setSessionRestored] = useState(false);
   const [themeColor, setThemeColor] = useState<ThemeColor>('indigo');
   const [activeThemeId, setActiveThemeId] = useState<ThemeId>('neon');
@@ -384,39 +386,22 @@ function App() {
   }, []);
 
   return (
-    <div className={`w-full h-screen flex flex-col overflow-hidden ${activeTheme.window}`}>
+    <div className={`w-full h-screen flex flex-col overflow-hidden ${activeTheme.window} bg-bg-primary`}>
       {/* Auto-updater notification */}
       <UpdateNotification />
       
-      <Titlebar />
+      <Titlebar activeTheme={activeTheme} />
       
-      <div className="flex-1 flex overflow-hidden">
-        {tabLayout === 'vertical' && (
-          <TabBar 
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onTabClick={setActiveTabId}
-            onTabClose={closeTab}
-            onAddTab={addTab}
-            onAddIncognitoTab={addIncognitoTabFn}
-            layout="vertical"
-            activeTheme={activeTheme}
-            onReopenTab={(url, title) => {
-              const newTab: Tab = {
-                id: Date.now().toString(),
-                title,
-                url,
-                isLoading: false
-              };
-              setTabs(prev => [...prev, newTab]);
-              setActiveTabId(newTab.id);
-            }}
-          />
-        )}
+      <div className="flex-1 flex overflow-hidden relative">
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onToggle={() => setSidebarOpen(!sidebarOpen)} 
+          activeTheme={activeTheme} 
+        />
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 bg-bg-primary">
           {tabLayout === 'horizontal' && (
-            <TabBar 
+            <TabBar
               tabs={tabs}
               activeTabId={activeTabId}
               onTabClick={setActiveTabId}
@@ -437,30 +422,58 @@ function App() {
               }}
             />
           )}
-          
+
           <PermissionPrompt />
-          
-          <AddressBar 
-            currentUrl={activeTab?.url || ''}
-            currentTitle={activeTab?.title || ''}
-            onNavigate={(url) => updateTabUrl(activeTabId, url)}
-            onBack={() => navigateTab('back')}
-            onForward={() => navigateTab('forward')}
-            onReload={() => navigateTab('reload')}
-            onToggleSplitView={toggleSplitView}
-            splitViewActive={splitView}
-            onOpenPrivacySettings={openSettings}
-            onOpenDownloads={openDownloadsTab}
-            inputRef={addressBarInputRef}
-            activeTheme={activeTheme}
-          />
-          
-          <BookmarksBar onNavigate={(url) => updateTabUrl(activeTabId, url)} />
+
+          {/* SPOTLIGHT COMMAND BAR */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4 pointer-events-none flex justify-center">
+            <div className="pointer-events-auto w-full flex justify-center">
+              <AddressBar
+                currentUrl={activeTab?.url || ''}
+                currentTitle={activeTab?.title || ''}
+                onNavigate={(url) => updateTabUrl(activeTabId, url)}
+                onBack={() => navigateTab('back')}
+                onForward={() => navigateTab('forward')}
+                onReload={() => navigateTab('reload')}
+                onToggleSplitView={toggleSplitView}
+                splitViewActive={splitView}
+                onOpenPrivacySettings={openSettings}
+                onOpenDownloads={openDownloadsTab}
+                inputRef={addressBarInputRef}
+                activeTheme={activeTheme}
+              />
+            </div>
+          </div>
+
+          <BookmarksBar onNavigate={(url) => updateTabUrl(activeTabId, url)} activeTheme={activeTheme} activeThemeId={activeThemeId} />
           
           <div className="flex-1 flex overflow-hidden relative">
-            <div className={`flex h-full ${splitView ? 'w-full' : 'flex-1'} transition-all duration-300`}>
-              <motion.div 
-                className={`h-full ${splitView ? `w-1/2 border-r ${activeTheme.border}` : 'w-full'}`}
+            {tabLayout === 'vertical' && (
+              <TabBar
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onTabClick={setActiveTabId}
+                onTabClose={closeTab}
+                onAddTab={addTab}
+                onAddIncognitoTab={addIncognitoTabFn}
+                layout="vertical"
+                activeTheme={activeTheme}
+                onReopenTab={(url, title) => {
+                  const newTab: Tab = {
+                    id: Date.now().toString(),
+                    title,
+                    url,
+                    isLoading: false
+                  };
+                  setTabs(prev => [...prev, newTab]);
+                  setActiveTabId(newTab.id);
+                }}
+              />
+            )}
+
+            <div className={`flex h-full ${splitView ? 'w-full' : 'flex-1'} transition-all duration-300 p-4`}>
+              <motion.div
+                className={`h-full relative overflow-hidden rounded-2xl shadow-inner-glass bg-bg-elevated ${splitView ? `w-1/2 border-r ${activeTheme.border}` : 'w-full'}`}
                 layout
               >
                 {activeTab && (
@@ -476,19 +489,20 @@ function App() {
                       setActiveThemeId={setActiveThemeId}
                     />
                   ) : (
-                    <WebViewContainer 
+                    <WebViewContainer
                       tab={activeTab}
                       onTitleUpdate={(title) => updateTabTitle(activeTab.id, title)}
                       onNavigate={(url) => updateTabUrl(activeTab.id, url)}
+                      activeTheme={activeTheme}
                     />
                   )
                 )}
               </motion.div>
-              
+
               <AnimatePresence>
                 {splitView && secondaryTab && (
-                  <motion.div 
-                    className="w-1/2 h-full"
+                  <motion.div
+                    className="w-1/2 h-full relative overflow-hidden rounded-2xl shadow-inner-glass bg-bg-elevated ml-4"
                     initial={{ opacity: 0, x: 100 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 100 }}
@@ -506,28 +520,30 @@ function App() {
                         setActiveThemeId={setActiveThemeId}
                       />
                     ) : (
-                      <WebViewContainer 
+                      <WebViewContainer
                         tab={secondaryTab}
                         onTitleUpdate={(title) => updateTabTitle(secondaryTab.id, title)}
                         onNavigate={(url) => updateTabUrl(secondaryTab.id, url)}
+                        activeTheme={activeTheme}
                       />
                     )}
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
-            
-            <HistoryPanel 
-              isOpen={historyOpen} 
-              onClose={() => setHistoryOpen(false)} 
-              onNavigate={(url) => updateTabUrl(activeTabId, url)}
-            />
-            
-            <PrivacySettings 
-              isOpen={privacySettingsOpen} 
-              onClose={() => setPrivacySettingsOpen(false)} 
-            />
           </div>
+
+          <HistoryPanel
+            isOpen={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            onNavigate={(url) => updateTabUrl(activeTabId, url)}
+            activeTheme={activeTheme}
+          />
+
+          <PrivacySettings
+            isOpen={privacySettingsOpen}
+            onClose={() => setPrivacySettingsOpen(false)}
+          />
         </div>
       </div>
     </div>

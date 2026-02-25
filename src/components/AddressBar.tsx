@@ -1,6 +1,7 @@
 import { useState, KeyboardEvent, useEffect, useRef, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, Settings, Download, Bookmark, ArrowLeft, ArrowRight, RotateCw, Search } from 'lucide-react';
 import type { OmniboxSuggestion, SearchEngine } from '../types/electron';
 import { resolveOmniboxInput } from '../utils/omnibox';
 import type { ThemeDef } from '../utils/themes';
@@ -29,12 +30,12 @@ const getDisplayUrl = (url: string) => {
   return url;
 };
 
-const AddressBar = ({ 
-  currentUrl, 
+const AddressBar = ({
+  currentUrl,
   currentTitle,
-  onNavigate, 
-  onBack, 
-  onForward, 
+  onNavigate,
+  onBack,
+  onForward,
   onReload,
   onToggleSplitView,
   splitViewActive,
@@ -96,109 +97,119 @@ const AddressBar = ({
     let mounted = true;
     
     const fetchStats = async () => {
-      if (!mounted) return;
+      if (!window.electron?.getAdBlockStats) return;
       try {
-        if (window.electron?.getAdBlockStats) {
-          const stats = await window.electron.getAdBlockStats();
-          if (mounted) setBlockedAds(stats.session);
+        const stats = await window.electron.getAdBlockStats();
+        if (mounted && stats) {
+          setBlockedAds(stats.session);
         }
-      } catch (e) {}
+      } catch (err) {
+        // Silently ignore errors to avoid console spam
+      }
     };
 
+    // Initial fetch
     fetchStats();
-    const interval = setInterval(fetchStats, 5000); // Every 5 seconds
+
+    // Check stats every 5 seconds instead of every second
+    const interval = setInterval(fetchStats, 5000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
   }, []);
 
-  // Load default search engine
+  // Fetch preferences
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
+    const fetchPrefs = async () => {
       try {
         if (!window.electron?.getSearchEngine) return;
         const res = await window.electron.getSearchEngine();
-        if (mounted && res?.engine) setSearchEngine(res.engine);
-      } catch {}
+        if (mounted && res?.engine) setSearchEngine(res.engine as SearchEngine);
+      } catch (err) {
+        console.error('Failed to fetch search engine:', err);
+      }
     };
-    load();
+    fetchPrefs();
     return () => { mounted = false; };
   }, []);
 
+  // Check if current URL is bookmarked
   useEffect(() => {
-    let mounted = true;
-    const load = async () => {
+    const checkBookmark = async () => {
+      if (!window.electron?.getBookmarks) return;
       try {
-        const url = getDisplayUrl(currentUrl);
-        if (!url || !window.electron?.isBookmarked) {
-          if (mounted) setIsBookmarked(false);
-          return;
-        }
-        const res = await window.electron.isBookmarked(url);
-        if (mounted) setIsBookmarked(!!res?.bookmarked);
-      } catch {
-        if (mounted) setIsBookmarked(false);
+        const bookmarks = await window.electron.getBookmarks();
+        setIsBookmarked(bookmarks.some((b: any) => b.url === currentUrl));
+      } catch (err) {
+        console.error('Failed to check bookmark:', err);
       }
     };
-    load();
-    return () => { mounted = false; };
+    
+    checkBookmark();
+    
+    const handleBookmarksChanged = () => checkBookmark();
+    window.addEventListener('bookmarks-changed', handleBookmarksChanged);
+    return () => window.removeEventListener('bookmarks-changed', handleBookmarksChanged);
   }, [currentUrl]);
 
+  // Handle omnibox suggestions
   useEffect(() => {
-    if (!isFocused) return;
-    const q = inputValue.trim();
-    if (!q) {
-      setSuggestions([]);
+    if (!isFocused || inputValue.length < 2) {
       setShowSuggestions(false);
-      setSelectedSuggestion(-1);
+      setSuggestions([]);
       return;
     }
-    if (!window.electron?.getOmniboxSuggestions) return;
 
-    const handle = setTimeout(async () => {
+    const fetchSuggestions = async () => {
+      if (!window.electron?.getOmniboxSuggestions) return;
       try {
-        const res = await window.electron.getOmniboxSuggestions(q, 8);
-        setSuggestions(res || []);
-        setShowSuggestions((res || []).length > 0);
-        setSelectedSuggestion(-1);
-
-        const rect = omniboxRef.current?.getBoundingClientRect();
-        if (rect) {
-          setSuggestPosition({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+        const results = await window.electron.getOmniboxSuggestions(inputValue);
+        if (results && results.length > 0) {
+          setSuggestions(results);
+          setShowSuggestions(true);
+          
+          if (omniboxRef.current) {
+            const rect = omniboxRef.current.getBoundingClientRect();
+            setSuggestPosition({
+              top: rect.bottom + 8,
+              left: rect.left,
+              width: rect.width
+            });
+          }
+        } else {
+          setShowSuggestions(false);
         }
-      } catch {
-        setSuggestions([]);
-        setShowSuggestions(false);
-        setSelectedSuggestion(-1);
+      } catch (err) {
+        console.error('Failed to get suggestions:', err);
       }
-    }, 120);
+    };
 
-    return () => clearTimeout(handle);
+    const debounce = setTimeout(fetchSuggestions, 150);
+    return () => clearTimeout(debounce);
   }, [inputValue, isFocused]);
 
   const navigateTo = (url: string) => {
-    onNavigate(url);
-    setInputValue(url);
     setShowSuggestions(false);
-    setSuggestions([]);
-    setSelectedSuggestion(-1);
+    onNavigate(url);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown' && suggestions.length > 0) {
-      e.preventDefault();
-      setShowSuggestions(true);
-      setSelectedSuggestion(prev => Math.min(prev + 1, suggestions.length - 1));
-      return;
-    }
-
-    if (e.key === 'ArrowUp' && suggestions.length > 0) {
-      e.preventDefault();
-      setShowSuggestions(true);
-      setSelectedSuggestion(prev => Math.max(prev - 1, -1));
-      return;
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSuggestion(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+      
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSuggestion(prev => Math.max(prev - 1, -1));
+        return;
+      }
     }
 
     if (e.key === 'Escape') {
@@ -239,162 +250,45 @@ const AddressBar = ({
   };
 
   return (
-    <div className={`h-14 backdrop-blur-md border-b flex items-center px-4 space-x-3 ${activeTheme ? activeTheme.panel : 'bg-dark-surface/40 border-neon-blue/10'}`}>
-      {/* Navigation Buttons */}
-      <div className="flex items-center space-x-2">
-        <NavButton onClick={onBack} title="Geri" activeTheme={activeTheme}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10 4L6 8L10 12" />
-          </svg>
-        </NavButton>
-        
-        <NavButton onClick={onForward} title="İleri" activeTheme={activeTheme}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M6 4L10 8L6 12" />
-          </svg>
-        </NavButton>
-        
-        <NavButton onClick={onReload} title="Yenile" activeTheme={activeTheme}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2C10.7614 2 13 4.23858 13 7" />
-            <path d="M10 7H13V4" />
-          </svg>
-        </NavButton>
-      </div>
-      
-      {/* Shield Button - Ad Blocker Status */}
-      <motion.button
-        ref={shieldButtonRef}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={handleShieldClick}
-        title="Reklam Engelleyici"
-        className={`shield-button w-9 h-9 rounded-lg glass flex items-center justify-center transition-all relative
-                   ${activeTheme ? activeTheme.accent : 'text-emerald-400'} ${activeTheme ? '' : 'neon-glow-green'}`}
-        style={{
-          boxShadow: blockedAds > 0 && !activeTheme
-            ? '0 0 10px rgba(52, 211, 153, 0.4), 0 0 20px rgba(52, 211, 153, 0.2)' 
-            : 'none'
-        }}
-      >
-        {/* Shield Icon */}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-        </svg>
-        
-        {/* Blocked count badge */}
-        {blockedAds > 0 && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg ${activeTheme ? `${activeTheme.active} text-white` : 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white'}`}
+    <motion.div 
+      initial={false}
+      animate={{ 
+        width: isFocused ? '100%' : '600px',
+        y: isFocused ? 0 : 0
+      }}
+      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+      className={`relative h-12 flex items-center px-2 rounded-full backdrop-blur-md shadow-glass z-50 overflow-visible
+        ${activeTheme ? activeTheme.panel : 'bg-bg-tertiary/70 border-white/10 border'}
+        ${isFocused ? 'ring-2 ring-accent-blue/50 shadow-glass-glow' : 'hover:shadow-glass-active hover:scale-[1.01] transition-transform'}`}
+    >
+      {/* Navigation Buttons (Fade out on focus) */}
+      <AnimatePresence>
+        {!isFocused && (
+          <motion.div 
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: 'auto' }}
+            exit={{ opacity: 0, width: 0 }}
+            className="flex items-center gap-1 mr-2 overflow-hidden flex-shrink-0"
           >
-            {blockedAds > 99 ? '99+' : blockedAds}
+            <NavButton onClick={onBack} title="Back">
+              <ArrowLeft size={16} />
+            </NavButton>
+            <NavButton onClick={onForward} title="Forward">
+              <ArrowRight size={16} />
+            </NavButton>
+            <NavButton onClick={onReload} title="Reload">
+              <RotateCw size={16} />
+            </NavButton>
           </motion.div>
         )}
-      </motion.button>
+      </AnimatePresence>
 
-      {/* Shield Popup - Rendered via Portal */}
-      {createPortal(
-        <AnimatePresence>
-          {showShieldPopup && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className={`shield-popup fixed w-64 border rounded-xl p-4 ${activeTheme ? activeTheme.panel : 'bg-dark-surface border-emerald-500/30'}`}
-              style={{ 
-                top: popupPosition.top,
-                left: popupPosition.left,
-                zIndex: 99999,
-                boxShadow: '0 0 30px rgba(0,0,0, 0.3), 0 8px 32px rgba(0,0,0,0.8)' 
-              }}
-            >
-              <div className="flex items-center space-x-3 mb-4">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activeTheme ? activeTheme.active : 'bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-white">
-                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 className={`font-semibold ${activeTheme ? '' : 'text-white'}`}>Koruma Aktif</h3>
-                  <p className={`text-xs ${activeTheme ? activeTheme.accent : 'text-emerald-400'}`}>Brave seviyesi engelleme</p>
-                </div>
-              </div>
-              
-              <div className={`rounded-lg p-3 mb-3 ${activeTheme ? 'bg-black/20' : 'bg-dark-bg/50'}`}>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-70 text-sm">Engellenen Reklamlar</span>
-                  <span className={`font-bold text-lg ${activeTheme ? activeTheme.accent : 'text-emerald-400'}`}>{blockedAds}</span>
-                </div>
-              </div>
-              
-              <div className="space-y-2 text-xs opacity-60">
-                <div className="flex items-center space-x-2">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className={activeTheme ? activeTheme.accent : 'text-emerald-400'}>
-                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                  </svg>
-                  <span>YouTube Reklam Atlama</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className={activeTheme ? activeTheme.accent : 'text-emerald-400'}>
-                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                  </svg>
-                  <span>İzleyici/Tracker Engelleme</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className={activeTheme ? activeTheme.accent : 'text-emerald-400'}>
-                    <path d="M6 0L0 3v3.5c0 3.05 2.56 5.91 6 6.5 3.44-.59 6-3.45 6-6.5V3L6 0z"/>
-                  </svg>
-                  <span>Gizlilik Koruması</span>
-                </div>
-              </div>
-              {onOpenPrivacySettings && (
-                <button
-                  onClick={() => {
-                    setShowShieldPopup(false);
-                    onOpenPrivacySettings();
-                  }}
-                  className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTheme ? `${activeTheme.hover} ${activeTheme.accent}` : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400'}`}
-                >
-                  Gizlilik Ayarları
-                </button>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-      
-      {/* Address Input (Omnibox) */}
-      <FeatureButton 
-        onClick={onToggleSplitView} 
-        title="Bölünmüş Görünüm"
-        active={splitViewActive}
-        activeTheme={activeTheme}
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="2" y="3" width="6" height="12" />
-          <rect x="10" y="3" width="6" height="12" />
-        </svg>
-      </FeatureButton>
-
-      <motion.div 
+      {/* Main Input Area */}
+      <div 
         ref={omniboxRef}
-        className={`flex-1 h-9 rounded-full glass flex items-center px-4 transition-all ${
-          isFocused ? (activeTheme ? `ring-2 ring-current ${activeTheme.accent}` : 'neon-glow ring-2 ring-neon-blue/30') : ''
-        } ${activeTheme ? activeTheme.input : ''}`}
-        animate={{ 
-          boxShadow: isFocused 
-            ? (activeTheme ? 'none' : '0 0 20px rgba(0, 240, 255, 0.3)')
-            : (activeTheme ? 'none' : '0 0 5px rgba(0, 240, 255, 0.1)')
-        }}
+        className="flex-1 flex items-center h-full gap-2 px-3 relative"
       >
-        {/* Lock Icon */}
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={`${activeTheme ? activeTheme.accent : 'text-neon-blue/70'} mr-2`}>
-          <path d="M7 1C5.34315 1 4 2.34315 4 4V6H3C2.44772 6 2 6.44772 2 7V12C2 12.5523 2.44772 13 3 13H11C11.5523 13 12 12.5523 12 12V7C12 6.44772 11.5523 6 11 6H10V4C10 2.34315 8.65685 1 7 1Z" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
+        <Search size={16} className={`flex-shrink-0 ${isFocused ? 'text-accent-blue' : 'text-gray-400'}`} />
         
         <input
           type="text"
@@ -412,113 +306,157 @@ const AddressBar = ({
               setInputValue(getDisplayUrl(currentUrl));
             }, 120);
           }}
-          placeholder="URL veya arama terimi girin..."
-          className={`flex-1 bg-transparent text-sm outline-none ${activeTheme ? 'placeholder-current opacity-70' : 'text-white/90 placeholder-white/40'}`}
+          placeholder="Search or enter address..."
+          className="flex-1 bg-transparent text-sm text-white placeholder-gray-400 outline-none w-full"
         />
-      </motion.div>
 
+        {/* Feature Buttons (Fade out on focus) */}
+        <AnimatePresence>
+          {!isFocused && (
+            <motion.div 
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: 'auto' }}
+              exit={{ opacity: 0, width: 0 }}
+              className="flex items-center gap-1 overflow-hidden flex-shrink-0 ml-2"
+            >
+              <FeatureButton onClick={handleToggleBookmark} active={isBookmarked} title="Bookmark">
+                <Bookmark size={16} fill={isBookmarked ? 'currentColor' : 'none'} />
+              </FeatureButton>
+
+              <button
+                ref={shieldButtonRef}
+                onClick={handleShieldClick}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors relative
+                  ${blockedAds > 0 ? 'text-accent-green hover:bg-accent-green/20' : 'text-gray-400 hover:bg-white/10'}`}
+              >
+                <Shield size={16} />
+                {blockedAds > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-accent-green text-bg-primary text-[9px] font-bold flex items-center justify-center">
+                    {blockedAds > 99 ? '99+' : blockedAds}
+                  </span>
+                )}
+              </button>
+
+              {onOpenDownloads && (
+                <FeatureButton onClick={onOpenDownloads} title="Downloads">
+                  <Download size={16} />
+                </FeatureButton>
+              )}
+              {onOpenPrivacySettings && (
+                <FeatureButton onClick={onOpenPrivacySettings} title="Settings">
+                  <Settings size={16} />
+                </FeatureButton>
+              )}
+              <FeatureButton onClick={onToggleSplitView} title="Split View" active={splitViewActive}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="12" y1="3" x2="12" y2="21" />
+                </svg>
+              </FeatureButton>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Suggestions Dropdown */}
       {createPortal(
         <AnimatePresence>
           {showSuggestions && suggestions.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -6, scale: 0.98 }}
-              transition={{ duration: 0.12 }}
-              className={`fixed border rounded-xl overflow-hidden ${activeTheme ? activeTheme.panel : 'bg-dark-surface border-neon-blue/20'}`}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.15, type: 'spring', bounce: 0.4 }}
+              className="fixed rounded-2xl overflow-hidden bg-bg-secondary/95 backdrop-blur-xl border border-white/10 shadow-glass-glow"
               style={{
                 top: suggestPosition.top,
                 left: suggestPosition.left,
                 width: suggestPosition.width,
                 zIndex: 99998,
-                boxShadow: '0 0 30px rgba(0,0,0, 0.18), 0 8px 32px rgba(0,0,0,0.8)'
               }}
             >
-              {suggestions.map((s, idx) => (
-                <button
-                  key={`${s.kind}:${s.url}`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    navigateTo(s.url);
-                  }}
-                  className={`w-full px-4 py-2 flex items-center justify-between text-left text-sm transition-colors ${
-                    idx === selectedSuggestion 
-                      ? (activeTheme ? `${activeTheme.active}` : 'bg-neon-blue/10 text-white')
-                      : (activeTheme ? `${activeTheme.hover} opacity-80` : 'text-white/80 hover:bg-white/5')
-                  }`}
-                >
-                  <span className="truncate">{s.title || s.url}</span>
-                  <span className="ml-3 text-[10px] uppercase tracking-wide opacity-50">
-                    {s.kind === 'bookmark' ? 'Yer İmi' : 'Geçmiş'}
-                  </span>
-                </button>
-              ))}
+              <div className="p-2 space-y-1">
+                {suggestions.map((s, idx) => (
+                  <button
+                    key={`${s.kind}:${s.url}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      navigateTo(s.url);
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl flex items-center gap-3 text-left text-sm transition-colors group
+                      ${idx === selectedSuggestion ? 'bg-accent-blue/20 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
+                  >
+                    <Search size={14} className={idx === selectedSuggestion ? 'text-accent-blue' : 'text-gray-500 group-hover:text-gray-400'} />
+                    <span className="flex-1 truncate">{s.title || s.url}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                      {s.kind === 'bookmark' ? 'Bookmark' : 'History'}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>,
         document.body
       )}
-      
-      {/* Feature Buttons */}
-      <div className="flex items-center space-x-2">
-        <FeatureButton onClick={handleToggleBookmark} title="Yer İmi" active={isBookmarked} activeTheme={activeTheme}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill={isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6">
-            <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-7-4-7 4V4z" />
-          </svg>
-        </FeatureButton>
-        {onOpenDownloads && (
-          <FeatureButton onClick={onOpenDownloads} title="İndirmeler" activeTheme={activeTheme}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M12 3v10" />
-              <path d="M8 11l4 4 4-4" />
-              <path d="M4 17v3h16v-3" />
-            </svg>
-          </FeatureButton>
-        )}
-        {onOpenPrivacySettings && (
-          <FeatureButton onClick={onOpenPrivacySettings} title="Ayarlar" activeTheme={activeTheme}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
-              <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04a2.2 2.2 0 0 1-1.56 3.76 2.2 2.2 0 0 1-1.56-.64l-.04-.04A1.8 1.8 0 0 0 15 19.4a1.8 1.8 0 0 0-1.08 1.64V21.1A2.2 2.2 0 0 1 11.7 23h-.2a2.2 2.2 0 0 1-2.22-1.9v-.06A1.8 1.8 0 0 0 8.2 19.4a1.8 1.8 0 0 0-1.98.36l-.04.04A2.2 2.2 0 0 1 2.42 18.2a2.2 2.2 0 0 1 .64-1.56l.04-.04A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-1.64-1.08H2.9A2.2 2.2 0 0 1 1 11.7v-.2a2.2 2.2 0 0 1 1.9-2.22h.06A1.8 1.8 0 0 0 4.6 8.2a1.8 1.8 0 0 0-.36-1.98l-.04-.04A2.2 2.2 0 0 1 5.8 2.42a2.2 2.2 0 0 1 1.56.64l.04.04A1.8 1.8 0 0 0 8.2 4.6a1.8 1.8 0 0 0 1.08-1.64V2.9A2.2 2.2 0 0 1 11.5 1h.2a2.2 2.2 0 0 1 2.22 1.9v.06A1.8 1.8 0 0 0 15 4.6a1.8 1.8 0 0 0 1.98-.36l.04-.04A2.2 2.2 0 0 1 21.58 5.8a2.2 2.2 0 0 1-.64 1.56l-.04.04A1.8 1.8 0 0 0 19.4 9a1.8 1.8 0 0 0 1.64 1.08h.06A2.2 2.2 0 0 1 23 12.3v.2a2.2 2.2 0 0 1-1.9 2.22h-.06A1.8 1.8 0 0 0 19.4 15z" />
-            </svg>
-          </FeatureButton>
-        )}
-      </div>
-    </div>
+
+      {/* Shield Popup */}
+      {createPortal(
+        <AnimatePresence>
+          {showShieldPopup && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="shield-popup fixed w-72 rounded-2xl p-4 bg-bg-secondary/95 backdrop-blur-xl border border-white/10 shadow-glass-glow"
+              style={{
+                top: popupPosition.top,
+                left: popupPosition.left - 240, // Offset to right-align roughly
+                zIndex: 99999,
+              }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-accent-green/20 text-accent-green flex items-center justify-center">
+                  <Shield size={24} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Shield Active</h3>
+                  <p className="text-xs text-accent-green">Blocking trackers</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl p-3 bg-white/5 border border-white/5 flex justify-between items-center mb-4">
+                <span className="text-sm text-gray-400">Blocked Ads</span>
+                <span className="font-bold text-lg text-accent-green">{blockedAds}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </motion.div>
   );
 };
 
-// Helper Components
-const NavButton = ({ onClick, children, title, activeTheme }: any) => (
-  <motion.button
-    whileHover={{ scale: 1.1 }}
-    whileTap={{ scale: 0.95 }}
+const NavButton = ({ onClick, children, title }: { onClick: () => void, children: React.ReactNode, title: string }) => (
+  <button
     onClick={onClick}
     title={title}
-    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-      activeTheme 
-        ? `${activeTheme.hover} opacity-70 hover:opacity-100` 
-        : 'text-white/70 hover:text-neon-blue hover:bg-white/10'
-    }`}
+    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
   >
     {children}
-  </motion.button>
+  </button>
 );
 
-const FeatureButton = ({ onClick, children, title, active = false, activeTheme }: any) => (
-  <motion.button
-    whileHover={{ scale: 1.1 }}
-    whileTap={{ scale: 0.95 }}
+const FeatureButton = ({ onClick, children, title, active = false }: { onClick: () => void, children: React.ReactNode, title: string, active?: boolean }) => (
+  <button
     onClick={onClick}
     title={title}
-    className={`w-9 h-9 rounded-lg glass flex items-center justify-center transition-all ${
-      active 
-        ? (activeTheme ? `${activeTheme.active} shadow-lg` : 'neon-glow text-neon-blue')
-        : (activeTheme ? `${activeTheme.hover} opacity-70 hover:opacity-100` : 'text-white/70 hover:text-neon-purple')
-    }`}
+    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors
+      ${active ? 'text-accent-blue bg-accent-blue/20' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
   >
     {children}
-  </motion.button>
+  </button>
 );
 
 export default AddressBar;

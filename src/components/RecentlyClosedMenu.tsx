@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ClosedTab } from '../types/electron';
 
 interface RecentlyClosedMenuProps {
   onReopen: (url: string, title: string) => void;
+  children?: ReactNode;
 }
 
 function getDomain(url: string): string {
@@ -24,12 +25,11 @@ function timeAgo(timestamp: number): string {
   return `${Math.floor(hours / 24)} gun once`;
 }
 
-const RecentlyClosedMenu = ({ onReopen }: RecentlyClosedMenuProps) => {
+const RecentlyClosedMenu = ({ onReopen, children }: RecentlyClosedMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [closedTabs, setClosedTabs] = useState<ClosedTab[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Load recently closed when dropdown opens
   useEffect(() => {
     if (!isOpen) return;
     
@@ -45,7 +45,6 @@ const RecentlyClosedMenu = ({ onReopen }: RecentlyClosedMenuProps) => {
     load();
   }, [isOpen]);
 
-  // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
@@ -59,19 +58,22 @@ const RecentlyClosedMenu = ({ onReopen }: RecentlyClosedMenuProps) => {
 
   return (
     <div className="relative" ref={menuRef}>
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-8 h-8 rounded-lg bg-dark-surface/50 hover:bg-dark-hover/50 border border-transparent hover:border-white/10 flex items-center justify-center text-white/50 hover:text-white/80 transition-all flex-shrink-0"
-        title="Son kapatilan sekmeler"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-      </motion.button>
-      
+      <div onClick={() => setIsOpen(!isOpen)}>
+        {children || (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="w-8 h-8 rounded-lg bg-dark-surface/50 hover:bg-dark-hover/50 border border-transparent hover:border-white/10 flex items-center justify-center text-white/50 hover:text-white/80 transition-all flex-shrink-0"
+            title="Son kapatilan sekmeler"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </motion.button>
+        )}
+      </div>
+
       <AnimatePresence>
         {isOpen && (
           <motion.div

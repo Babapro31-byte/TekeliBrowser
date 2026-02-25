@@ -558,6 +558,32 @@ function setupNavigationGuards() {
         );
       }
 
+      if (params.mediaType === 'image' && params.srcURL) {
+        template.push(
+          { type: 'separator' },
+          {
+            label: 'Resmi Farklı Kaydet',
+            click: async () => {
+              if (!mainWindow) return;
+              try {
+                const result = await mainWindow.webContents.executeJavaScript(`
+                  window.electron?.startDownload?.('${params.srcURL}')
+                `);
+                if (!result?.success) {
+                  console.error('Download failed:', result?.error);
+                }
+              } catch (e) {
+                console.error('Download error:', e);
+              }
+            }
+          },
+          {
+            label: 'Resim URL\'sini Kopyala',
+            click: () => clipboard.writeText(params.srcURL)
+          }
+        );
+      }
+
       if (params.selectionText) {
         template.push(
           { type: 'separator' },
