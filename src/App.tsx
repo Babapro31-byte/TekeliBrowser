@@ -1,29 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { MotionConfig } from 'framer-motion';
 import Titlebar from './components/Titlebar';
 import TabBar from './components/TabBar';
 import AddressBar from './components/AddressBar';
 import BookmarksBar from './components/BookmarksBar';
 import WebViewContainer from './components/WebViewContainer';
 import HistoryPanel from './components/HistoryPanel';
+import BookmarksPanel from './components/BookmarksPanel';
 import PermissionPrompt from './components/PermissionPrompt';
-import PrivacySettings from './components/PrivacySettings';
 import UpdateNotification from './components/UpdateNotification';
-import SettingsPanel, { type ThemeColor, type PrivacyLevel, type ThemeId } from './components/SettingsPanel';
+import SettingsPanel from './components/SettingsPanel';
 import Sidebar from './components/Sidebar';
-import { getThemes, colorClasses } from './utils/themes';
+import StatusBar from './components/StatusBar';
 import type { SessionData } from './types/electron';
+import { loadStoredTheme } from './utils/theme';
 
 export interface Tab {
   id: string;
   title: string;
   url: string;
   isLoading: boolean;
-  isIncognito?: boolean;
-  partition?: string;
 }
 
-// Default URL for new tabs
 const DEFAULT_URL = 'tekeli://newtab';
 const DOWNLOADS_URL = 'tekeli://downloads';
 const SETTINGS_URL = 'tekeli://ayarlar';
@@ -38,48 +36,28 @@ function App() {
     }
   ]);
   const [activeTabId, setActiveTabId] = useState<string>('1');
-  const [splitView, setSplitView] = useState(false);
-  const [secondaryTabId, setSecondaryTabId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [privacySettingsOpen, setPrivacySettingsOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessionRestored, setSessionRestored] = useState(false);
-  const [themeColor, setThemeColor] = useState<ThemeColor>('indigo');
-  const [activeThemeId, setActiveThemeId] = useState<ThemeId>('neon');
-  const [privacyLevel, setPrivacyLevel] = useState<PrivacyLevel>('strict');
-  const [tabLayout, setTabLayout] = useState<'horizontal' | 'vertical'>('horizontal');
+  const [settingsSection, setSettingsSection] = useState('general');
   const tabsRef = useRef(tabs);
 
-  const activeColor = colorClasses[themeColor] || colorClasses.indigo;
-  const themes = getThemes(activeColor);
-  const activeTheme = themes[activeThemeId] || themes.neon;
-
   const activeTabIdRef = useRef(activeTabId);
-  const mediaStateRef = useRef<Record<string, { url: string; seconds: number }>>({});
   const addressBarInputRef = useRef<HTMLInputElement>(null);
 
-  // Keep refs in sync
   useEffect(() => { tabsRef.current = tabs; }, [tabs]);
   useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
 
+  useEffect(() => { loadStoredTheme(); }, []);
+
   const activeTab = tabs.find(tab => tab.id === activeTabId);
-  const secondaryTab = secondaryTabId ? tabs.find(tab => tab.id === secondaryTabId) : null;
 
-  const applyYouTubeResumeTime = (url: string, seconds?: number) => {
-    if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return url;
-    if (!/^https?:\/\//i.test(url)) return url;
-    if (!/^(https?:\/\/)?(www\.)?(youtube\.com\/watch|youtu\.be\/)/i.test(url)) return url;
-
-    try {
-      const u = new URL(url);
-      u.searchParams.delete('t');
-      u.searchParams.delete('start');
-      u.searchParams.set('t', `${Math.floor(seconds)}s`);
-      return u.toString();
-    } catch {
-      return url;
-    }
-  };
+  const dispatchNavigation = useCallback((direction: 'back' | 'forward' | 'reload') => {
+    window.dispatchEvent(new CustomEvent('browser-navigation', {
+      detail: { direction, tabId: activeTabIdRef.current }
+    }));
+  }, []);
 
   const applyRestoredSession = useCallback((session: SessionData) => {
     const restoredTabs: Tab[] = session.tabs.map(t => ({
@@ -95,7 +73,6 @@ function App() {
     setActiveTabId(restoredActiveId);
   }, []);
 
-  // --- Session Restore on mount ---
   useEffect(() => {
     if (sessionRestored) return;
     
@@ -119,27 +96,17 @@ function App() {
     restore();
   }, [sessionRestored, applyRestoredSession]);
 
-  // --- Auto-save session every 30s ---
   useEffect(() => {
     if (!sessionRestored) return;
 
     const saveCurrentSession = () => {
       if (!window.electron?.saveSession) return;
-      // Exclude incognito tabs from session restore
-      const currentTabs = tabsRef.current
-        .filter(t => !t.isIncognito)
-        .map(t => {
-          const media = mediaStateRef.current[t.id];
-          const baseUrl = media?.url || t.url;
-          const url = applyYouTubeResumeTime(baseUrl, media?.seconds);
-          return { id: t.id, title: t.title, url, resume: media?.seconds ? { youtubeSeconds: Math.floor(media.seconds) } : undefined };
-        });
+      const currentTabs = tabsRef.current.map(t => ({ id: t.id, title: t.title, url: t.url }));
       window.electron.saveSession(currentTabs, activeTabIdRef.current);
     };
 
     const interval = setInterval(saveCurrentSession, 30000);
 
-    // Save on beforeunload
     const handleBeforeUnload = () => saveCurrentSession();
     window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -149,20 +116,6 @@ function App() {
     };
   }, [sessionRestored]);
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent;
-      const detail = ce.detail as any;
-      if (!detail || typeof detail.tabId !== 'string') return;
-      if (typeof detail.url !== 'string' || !detail.url) return;
-      if (typeof detail.seconds !== 'number' || !Number.isFinite(detail.seconds)) return;
-      mediaStateRef.current[detail.tabId] = { url: detail.url, seconds: detail.seconds };
-    };
-    window.addEventListener('tab-media-state', handler as any);
-    return () => window.removeEventListener('tab-media-state', handler as any);
-  }, []);
-
-  // --- Popup redirect to new tab ---
   useEffect(() => {
     if (!window.electron?.onOpenUrlInNewTab) return;
     const cleanup = window.electron.onOpenUrlInNewTab((url: string) => {
@@ -178,7 +131,6 @@ function App() {
     return cleanup;
   }, []);
 
-  // --- Keyboard shortcuts from main process ---
   useEffect(() => {
     if (!window.electron?.onShortcut) return;
     
@@ -192,9 +144,6 @@ function App() {
           break;
         case 'reopen-tab':
           reopenLastClosedTab();
-          break;
-        case 'new-incognito-tab':
-          addIncognitoTabFn();
           break;
         case 'toggle-history':
           setHistoryOpen(prev => !prev);
@@ -230,7 +179,6 @@ function App() {
     });
 
     return cleanup;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addTabFn = useCallback(() => {
@@ -246,39 +194,8 @@ function App() {
 
   const addTab = addTabFn;
 
-  const addIncognitoTabFn = useCallback(async () => {
-    if (!window.electron?.createIncognitoPartition) return;
-    try {
-      const { partition } = await window.electron.createIncognitoPartition();
-      const newTab: Tab = {
-        id: Date.now().toString(),
-        title: 'Gizli Sekme',
-        url: DEFAULT_URL,
-        isLoading: false,
-        isIncognito: true,
-        partition
-      };
-      setTabs(prev => [...prev, newTab]);
-      setActiveTabId(newTab.id);
-    } catch (err) {
-      console.error('[App] Create incognito tab failed:', err);
-    }
-  }, []);
-
   const closeTabFn = useCallback((tabId: string) => {
     setTabs(prevTabs => {
-      const closedTab = prevTabs.find(t => t.id === tabId);
-      
-      // Clear incognito session when closing incognito tab
-      if (closedTab?.isIncognito && closedTab?.partition && window.electron?.clearIncognitoSession) {
-        window.electron.clearIncognitoSession(closedTab.partition);
-      }
-      
-      // Track closed tab (not incognito)
-      if (closedTab && !closedTab.isIncognito && window.electron?.tabClosed) {
-        window.electron.tabClosed({ title: closedTab.title, url: closedTab.url });
-      }
-      
       const newTabs = prevTabs.filter(tab => tab.id !== tabId);
       if (newTabs.length === 0) {
         const defaultTab: Tab = {
@@ -297,14 +214,6 @@ function App() {
       });
       
       return newTabs;
-    });
-    
-    setSecondaryTabId(prev => {
-      if (prev === tabId) {
-        setSplitView(false);
-        return null;
-      }
-      return prev;
     });
   }, []);
 
@@ -330,47 +239,54 @@ function App() {
     }
   }, []);
 
-  const updateTabUrl = (tabId: string, url: string) => {
-    setTabs(tabs.map(tab => 
+  // URL güncellemesi yükleme durumunu YÖNETMEZ; isLoading artık tek kaynak olan
+  // WebViewContainer'ın gerçek webview olaylarından (onLoadingChange) gelir.
+  // Tek istisna: Ayarlar yerel bir paneldir (webview yok), bu yüzden onu false'a sabitliyoruz.
+  const updateTabUrl = useCallback((tabId: string, url: string) => {
+    const isSettings = url === SETTINGS_URL;
+    setTabs(prev => prev.map(tab =>
       tab.id === tabId
-        ? { ...tab, url, title: url === SETTINGS_URL ? 'Ayarlar' : tab.title, isLoading: url === SETTINGS_URL ? false : true }
+        ? { ...tab, url, title: isSettings ? 'Ayarlar' : tab.title, isLoading: isSettings ? false : tab.isLoading }
         : tab
     ));
-  };
+  }, []);
 
-  const openSettings = useCallback(() => {
+  // Yükleme durumunun tek otoritesi. Değer değişmiyorsa yeni nesne üretmeyerek
+  // gereksiz yeniden render'ları önler.
+  const setTabLoading = useCallback((tabId: string, loading: boolean) => {
+    setTabs(prev => prev.map(tab =>
+      tab.id === tabId
+        ? (tab.isLoading === loading ? tab : { ...tab, isLoading: loading })
+        : tab
+    ));
+  }, []);
+
+  const openSettings = useCallback((section: string = 'general') => {
     const targetId = activeTabIdRef.current;
     setTabs(prev => prev.map(t => (t.id === targetId ? { ...t, url: SETTINGS_URL, title: 'Ayarlar', isLoading: false } : t)));
     setActiveTabId(targetId);
-    setPrivacySettingsOpen(false);
+    setSettingsSection(section);
   }, []);
 
-  const updateTabTitle = (tabId: string, title: string) => {
-    setTabs(tabs.map(tab => 
-      tab.id === tabId ? { ...tab, title, isLoading: false } : tab
+  const goHome = useCallback(() => {
+    const targetId = activeTabIdRef.current;
+    setTabs(prev => prev.map(t => (
+      t.id === targetId
+        ? { ...t, url: DEFAULT_URL, title: 'Yeni Sekme', isLoading: false }
+        : t
+    )));
+    setActiveTabId(targetId);
+  }, []);
+
+  // Başlık güncellemesi artık yükleme durumuna dokunmaz (eski hatanın kaynağıydı).
+  const updateTabTitle = useCallback((tabId: string, title: string) => {
+    setTabs(prev => prev.map(tab =>
+      tab.id === tabId ? { ...tab, title } : tab
     ));
-  };
-
-  const toggleSplitView = () => {
-    if (!splitView && tabs.length > 1) {
-      const currentIndex = tabs.findIndex(tab => tab.id === activeTabId);
-      const nextIndex = (currentIndex + 1) % tabs.length;
-      setSecondaryTabId(tabs[nextIndex].id);
-    } else if (splitView) {
-      setSecondaryTabId(null);
-    }
-    setSplitView(!splitView);
-  };
-
-  const navigateTab = (direction: 'back' | 'forward' | 'reload') => {
-    const event = new CustomEvent('browser-navigation', { 
-      detail: { direction, tabId: activeTabIdRef.current } 
-    });
-    window.dispatchEvent(event);
-  };
+  }, []);
 
   const openDownloadsTab = useCallback(() => {
-    const existing = tabsRef.current.find(t => t.url === DOWNLOADS_URL && !t.isIncognito);
+    const existing = tabsRef.current.find(t => t.url === DOWNLOADS_URL);
     if (existing) {
       setActiveTabId(existing.id);
       return;
@@ -385,168 +301,119 @@ function App() {
     setActiveTabId(newTab.id);
   }, []);
 
+  useEffect(() => {
+    const handleUiAction = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      switch (customEvent.detail?.action) {
+        case 'open-bookmarks':
+          setBookmarksOpen(true);
+          break;
+        case 'open-history':
+          setHistoryOpen(true);
+          break;
+        case 'open-downloads':
+          openDownloadsTab();
+          break;
+        case 'open-settings':
+          openSettings();
+          break;
+      }
+    };
+
+    window.addEventListener('tekeli-ui-action', handleUiAction as EventListener);
+    return () => window.removeEventListener('tekeli-ui-action', handleUiAction as EventListener);
+  }, [openDownloadsTab, openSettings]);
+
   return (
-    <div className={`w-full h-screen flex flex-col overflow-hidden ${activeTheme.window} bg-bg-primary`}>
-      {/* Auto-updater notification */}
+    <MotionConfig reducedMotion="user">
+    <div className="w-full h-screen flex flex-col overflow-hidden bg-background text-on-surface font-body">
       <UpdateNotification />
       
-      <Titlebar activeTheme={activeTheme} />
+      <Titlebar />
       
-      <div className="flex-1 flex overflow-hidden relative">
-        <Sidebar 
-          isOpen={sidebarOpen} 
-          onToggle={() => setSidebarOpen(!sidebarOpen)} 
-          activeTheme={activeTheme} 
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onTabClick={setActiveTabId}
+          onTabClose={closeTab}
+          onAddTab={addTab}
+          onReopenTab={(url, title) => {
+            const newTab: Tab = {
+              id: Date.now().toString(),
+              title,
+              url,
+              isLoading: false
+            };
+            setTabs(prev => [...prev, newTab]);
+            setActiveTabId(newTab.id);
+          }}
         />
 
-        <div className="flex-1 flex flex-col min-w-0 bg-bg-primary">
-          {tabLayout === 'horizontal' && (
-            <TabBar
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onTabClick={setActiveTabId}
-              onTabClose={closeTab}
-              onAddTab={addTab}
-              onAddIncognitoTab={addIncognitoTabFn}
-              layout="horizontal"
-              activeTheme={activeTheme}
-              onReopenTab={(url, title) => {
-                const newTab: Tab = {
-                  id: Date.now().toString(),
-                  title,
-                  url,
-                  isLoading: false
-                };
-                setTabs(prev => [...prev, newTab]);
-                setActiveTabId(newTab.id);
-              }}
-            />
+        <AddressBar
+          currentUrl={activeTab?.url || DEFAULT_URL}
+          currentTitle={activeTab?.title}
+          onNavigate={(url) => activeTab && updateTabUrl(activeTab.id, url)}
+          onBack={() => dispatchNavigation('back')}
+          onForward={() => dispatchNavigation('forward')}
+          onReload={() => dispatchNavigation('reload')}
+          onHome={goHome}
+          onOpenDownloads={openDownloadsTab}
+          onOpenPrivacySettings={() => openSettings('privacy')}
+          onToggleAISidebar={() => setSidebarOpen(prev => !prev)}
+          inputRef={addressBarInputRef}
+        />
+
+        <PermissionPrompt />
+
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {activeTab?.url === DEFAULT_URL && (
+            <BookmarksBar onNavigate={(url) => updateTabUrl(activeTabId, url)} />
           )}
-
-          <PermissionPrompt />
-
-          {/* SPOTLIGHT COMMAND BAR */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4 pointer-events-none flex justify-center">
-            <div className="pointer-events-auto w-full flex justify-center">
-              <AddressBar
-                currentUrl={activeTab?.url || ''}
-                currentTitle={activeTab?.title || ''}
-                onNavigate={(url) => updateTabUrl(activeTabId, url)}
-                onBack={() => navigateTab('back')}
-                onForward={() => navigateTab('forward')}
-                onReload={() => navigateTab('reload')}
-                onToggleSplitView={toggleSplitView}
-                splitViewActive={splitView}
-                onOpenPrivacySettings={openSettings}
-                onOpenDownloads={openDownloadsTab}
-                inputRef={addressBarInputRef}
-                activeTheme={activeTheme}
-              />
-            </div>
-          </div>
-
-          <BookmarksBar onNavigate={(url) => updateTabUrl(activeTabId, url)} activeTheme={activeTheme} activeThemeId={activeThemeId} />
           
-          <div className="flex-1 flex overflow-hidden relative">
-            {tabLayout === 'vertical' && (
-              <TabBar
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onTabClick={setActiveTabId}
-                onTabClose={closeTab}
-                onAddTab={addTab}
-                onAddIncognitoTab={addIncognitoTabFn}
-                layout="vertical"
-                activeTheme={activeTheme}
-                onReopenTab={(url, title) => {
-                  const newTab: Tab = {
-                    id: Date.now().toString(),
-                    title,
-                    url,
-                    isLoading: false
-                  };
-                  setTabs(prev => [...prev, newTab]);
-                  setActiveTabId(newTab.id);
-                }}
-              />
-            )}
-
-            <div className={`flex h-full ${splitView ? 'w-full' : 'flex-1'} transition-all duration-300 p-4`}>
-              <motion.div
-                className={`h-full relative overflow-hidden rounded-2xl shadow-inner-glass bg-bg-elevated ${splitView ? `w-1/2 border-r ${activeTheme.border}` : 'w-full'}`}
-                layout
-              >
-                {activeTab && (
-                  activeTab.url === SETTINGS_URL ? (
-                    <SettingsPanel
-                      themeColor={themeColor}
-                      setThemeColor={setThemeColor}
-                      privacyLevel={privacyLevel}
-                      setPrivacyLevel={setPrivacyLevel}
-                      tabLayout={tabLayout}
-                      setTabLayout={setTabLayout}
-                      activeThemeId={activeThemeId}
-                      setActiveThemeId={setActiveThemeId}
-                    />
-                  ) : (
-                    <WebViewContainer
-                      tab={activeTab}
-                      onTitleUpdate={(title) => updateTabTitle(activeTab.id, title)}
-                      onNavigate={(url) => updateTabUrl(activeTab.id, url)}
-                      activeTheme={activeTheme}
-                    />
-                  )
-                )}
-              </motion.div>
-
-              <AnimatePresence>
-                {splitView && secondaryTab && (
-                  <motion.div
-                    className="w-1/2 h-full relative overflow-hidden rounded-2xl shadow-inner-glass bg-bg-elevated ml-4"
-                    initial={{ opacity: 0, x: 100 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 100 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {secondaryTab.url === SETTINGS_URL ? (
-                      <SettingsPanel
-                        themeColor={themeColor}
-                        setThemeColor={setThemeColor}
-                        privacyLevel={privacyLevel}
-                        setPrivacyLevel={setPrivacyLevel}
-                        tabLayout={tabLayout}
-                        setTabLayout={setTabLayout}
-                        activeThemeId={activeThemeId}
-                        setActiveThemeId={setActiveThemeId}
-                      />
-                    ) : (
-                      <WebViewContainer
-                        tab={secondaryTab}
-                        onTitleUpdate={(title) => updateTabTitle(secondaryTab.id, title)}
-                        onNavigate={(url) => updateTabUrl(secondaryTab.id, url)}
-                        activeTheme={activeTheme}
-                      />
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+          <div className="flex-1 flex overflow-hidden relative min-h-0">
+            <div className="flex h-full w-full min-w-0 min-h-0 transition-all duration-300">
+              {activeTab && (
+                activeTab.url === SETTINGS_URL ? (
+                  <SettingsPanel initialSection={settingsSection} />
+                ) : (
+                  <WebViewContainer
+                    tab={activeTab}
+                    onTitleUpdate={(title) => updateTabTitle(activeTab.id, title)}
+                    onNavigate={(url) => updateTabUrl(activeTab.id, url)}
+                    onLoadingChange={(loading) => setTabLoading(activeTab.id, loading)}
+                  />
+                )
+              )}
             </div>
+
+            <Sidebar 
+              isOpen={sidebarOpen} 
+              onToggle={() => setSidebarOpen(!sidebarOpen)} 
+              onOpenSettings={openSettings}
+              onOpenDownloads={openDownloadsTab}
+              onOpenHistory={() => setHistoryOpen(true)}
+              onOpenBookmarks={() => setBookmarksOpen(true)}
+            />
           </div>
-
-          <HistoryPanel
-            isOpen={historyOpen}
-            onClose={() => setHistoryOpen(false)}
-            onNavigate={(url) => updateTabUrl(activeTabId, url)}
-            activeTheme={activeTheme}
-          />
-
-          <PrivacySettings
-            isOpen={privacySettingsOpen}
-            onClose={() => setPrivacySettingsOpen(false)}
-          />
         </div>
+
+        <HistoryPanel
+          isOpen={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          onNavigate={(url) => updateTabUrl(activeTabId, url)}
+        />
+
+        <BookmarksPanel
+          isOpen={bookmarksOpen}
+          onClose={() => setBookmarksOpen(false)}
+          onNavigate={(url) => updateTabUrl(activeTabId, url)}
+        />
       </div>
+
+      <StatusBar systemStatus="PROTECTED" clusterName="192.168.1.1" />
     </div>
+    </MotionConfig>
   );
 }
 

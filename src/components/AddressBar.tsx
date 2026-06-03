@@ -1,10 +1,6 @@
-import { useState, KeyboardEvent, useEffect, useRef, type RefObject } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Settings, Download, Bookmark, ArrowLeft, ArrowRight, RotateCw, Search } from 'lucide-react';
-import type { OmniboxSuggestion, SearchEngine } from '../types/electron';
-import { resolveOmniboxInput } from '../utils/omnibox';
-import type { ThemeDef } from '../utils/themes';
+import { useState, KeyboardEvent, useEffect, useRef } from 'react';
+import type { OmniboxSuggestion, SearchEngine, SearchHistoryEntry } from '../types/electron';
+import { isSearchQueryInput, resolveOmniboxInput } from '../utils/omnibox';
 
 interface AddressBarProps {
   currentUrl: string;
@@ -13,22 +9,24 @@ interface AddressBarProps {
   onBack: () => void;
   onForward: () => void;
   onReload: () => void;
-  onToggleSplitView: () => void;
-  splitViewActive: boolean;
+  onHome?: () => void;
+  onToggleSplitView?: () => void;
+  splitViewActive?: boolean;
   onOpenPrivacySettings?: () => void;
   onOpenDownloads?: () => void;
-  inputRef?: RefObject<HTMLInputElement>;
-  activeTheme?: ThemeDef;
+  onToggleAISidebar?: () => void;
+  aiSidebarActive?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement>;
 }
 
-// Check if URL is an internal URL
 const isInternalUrl = (url: string) => url.startsWith('tekeli://');
 
-// Get display value for URL (hide internal URLs)
 const getDisplayUrl = (url: string) => {
   if (isInternalUrl(url)) return '';
   return url;
 };
+
+const normalizeAddressInput = (value: string) => value.trim();
 
 const AddressBar = ({
   currentUrl,
@@ -37,89 +35,33 @@ const AddressBar = ({
   onBack,
   onForward,
   onReload,
-  onToggleSplitView,
-  splitViewActive,
+  onHome,
   onOpenPrivacySettings,
   onOpenDownloads,
-  inputRef,
-  activeTheme
+  onToggleAISidebar,
+  inputRef
 }: AddressBarProps) => {
+  type SuggestionItem =
+    | (OmniboxSuggestion & { kind: 'history' | 'bookmark' })
+    | { kind: 'query'; query: string; title: string; url: string };
+
   const [inputValue, setInputValue] = useState(getDisplayUrl(currentUrl));
   const [isFocused, setIsFocused] = useState(false);
-  const [blockedAds, setBlockedAds] = useState(0);
-  const [showShieldPopup, setShowShieldPopup] = useState(false);
   const [searchEngine, setSearchEngine] = useState<SearchEngine>('duckduckgo');
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [suggestions, setSuggestions] = useState<OmniboxSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
-  const shieldButtonRef = useRef<HTMLButtonElement>(null);
   const omniboxRef = useRef<HTMLDivElement>(null);
-  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
   const [suggestPosition, setSuggestPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [isMouseOverSuggestions, setIsMouseOverSuggestions] = useState(false);
 
-  // Update popup position when opening
-  const handleShieldClick = () => {
-    if (!showShieldPopup && shieldButtonRef.current) {
-      const rect = shieldButtonRef.current.getBoundingClientRect();
-      setPopupPosition({
-        top: rect.bottom + 8,
-        left: rect.left
-      });
-    }
-    setShowShieldPopup(!showShieldPopup);
-  };
-
-  // Close popup when clicking outside
-  useEffect(() => {
-    if (!showShieldPopup) return;
-    
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.shield-popup') && !target.closest('.shield-button')) {
-        setShowShieldPopup(false);
-      }
-    };
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [showShieldPopup]);
-
-  // Sync input with currentUrl when not focused
   useEffect(() => {
     if (!isFocused) {
       setInputValue(getDisplayUrl(currentUrl));
     }
   }, [currentUrl, isFocused]);
 
-  // Fetch ad block stats (less frequently for performance)
-  useEffect(() => {
-    let mounted = true;
-    
-    const fetchStats = async () => {
-      if (!window.electron?.getAdBlockStats) return;
-      try {
-        const stats = await window.electron.getAdBlockStats();
-        if (mounted && stats) {
-          setBlockedAds(stats.session);
-        }
-      } catch (err) {
-        // Silently ignore errors to avoid console spam
-      }
-    };
-
-    // Initial fetch
-    fetchStats();
-
-    // Check stats every 5 seconds instead of every second
-    const interval = setInterval(fetchStats, 5000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Fetch preferences
   useEffect(() => {
     let mounted = true;
     const fetchPrefs = async () => {
@@ -135,7 +77,6 @@ const AddressBar = ({
     return () => { mounted = false; };
   }, []);
 
-  // Check if current URL is bookmarked
   useEffect(() => {
     const checkBookmark = async () => {
       if (!window.electron?.getBookmarks) return;
@@ -154,20 +95,56 @@ const AddressBar = ({
     return () => window.removeEventListener('bookmarks-changed', handleBookmarksChanged);
   }, [currentUrl]);
 
-  // Handle omnibox suggestions
+  const navigateTo = (url: string) => {
+    setShowSuggestions(false);
+    onNavigate(url);
+  };
+
+  const submitInput = async (raw: string) => {
+    const trimmed = normalizeAddressInput(raw);
+    const url = resolveOmniboxInput(trimmed, searchEngine);
+    if (!url) return;
+    if (isSearchQueryInput(trimmed)) {
+      try {
+        await window.electron?.addSearchQuery?.(trimmed);
+      } catch {}
+    }
+    navigateTo(url);
+  };
+
   useEffect(() => {
-    if (!isFocused || inputValue.length < 2) {
+    if (!isFocused || inputValue.trim().length < 1) {
       setShowSuggestions(false);
       setSuggestions([]);
       return;
     }
 
+    let mounted = true;
+    let debounceTimer: ReturnType<typeof setTimeout>;
+
     const fetchSuggestions = async () => {
       if (!window.electron?.getOmniboxSuggestions) return;
       try {
-        const results = await window.electron.getOmniboxSuggestions(inputValue);
-        if (results && results.length > 0) {
-          setSuggestions(results);
+        const [results, searches] = await Promise.all([
+          window.electron.getOmniboxSuggestions(inputValue, 6),
+          window.electron.getSearchHistory?.(inputValue, 6) || Promise.resolve([] as SearchHistoryEntry[])
+        ]);
+
+        if (!mounted || !inputValue.trim()) return;
+
+        const mappedSearches: SuggestionItem[] = (searches || []).map((q) => ({
+          kind: 'query',
+          query: q.query,
+          title: q.query,
+          url: resolveOmniboxInput(q.query, searchEngine)
+        }));
+
+        const merged = [...mappedSearches, ...(results || [])].slice(0, 8);
+
+        if (!mounted || !inputValue.trim()) return;
+
+        if (merged.length > 0) {
+          setSuggestions(merged);
           setShowSuggestions(true);
           
           if (omniboxRef.current) {
@@ -182,18 +159,18 @@ const AddressBar = ({
           setShowSuggestions(false);
         }
       } catch (err) {
-        console.error('Failed to get suggestions:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to get suggestions:', err);
+        }
       }
     };
 
-    const debounce = setTimeout(fetchSuggestions, 150);
-    return () => clearTimeout(debounce);
-  }, [inputValue, isFocused]);
-
-  const navigateTo = (url: string) => {
-    setShowSuggestions(false);
-    onNavigate(url);
-  };
+    debounceTimer = setTimeout(fetchSuggestions, 150);
+    return () => {
+      mounted = false;
+      clearTimeout(debounceTimer);
+    };
+  }, [inputValue, isFocused, searchEngine]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (showSuggestions && suggestions.length > 0) {
@@ -221,15 +198,18 @@ const AddressBar = ({
     if (e.key === 'Enter') {
       if (selectedSuggestion >= 0 && selectedSuggestion < suggestions.length) {
         e.preventDefault();
-        navigateTo(suggestions[selectedSuggestion].url);
+        const selected = suggestions[selectedSuggestion];
+        if (selected.kind === 'query') {
+          setInputValue(selected.query);
+          submitInput(selected.query);
+        } else {
+          navigateTo(selected.url);
+        }
         (e.target as HTMLInputElement).blur();
         return;
       }
 
-      const url = resolveOmniboxInput(inputValue, searchEngine);
-      if (!url) return;
-
-      navigateTo(url);
+      submitInput(inputValue);
       (e.target as HTMLInputElement).blur();
     }
   };
@@ -249,214 +229,172 @@ const AddressBar = ({
     } catch {}
   };
 
+  const addressIcon = currentUrl === 'tekeli://newtab'
+    ? 'shield'
+    : currentUrl.startsWith('https://')
+      ? 'lock'
+      : currentUrl.startsWith('http://')
+        ? 'warning'
+        : 'language';
+
   return (
-    <motion.div 
-      initial={false}
-      animate={{ 
-        width: isFocused ? '100%' : '600px',
-        y: isFocused ? 0 : 0
-      }}
-      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-      className={`relative h-12 flex items-center px-2 rounded-full backdrop-blur-md shadow-glass z-50 overflow-visible
-        ${activeTheme ? activeTheme.panel : 'bg-bg-tertiary/70 border-white/10 border'}
-        ${isFocused ? 'ring-2 ring-accent-blue/50 shadow-glass-glow' : 'hover:shadow-glass-active hover:scale-[1.01] transition-transform'}`}
-    >
-      {/* Navigation Buttons (Fade out on focus) */}
-      <AnimatePresence>
-        {!isFocused && (
-          <motion.div 
-            initial={{ opacity: 0, width: 0 }}
-            animate={{ opacity: 1, width: 'auto' }}
-            exit={{ opacity: 0, width: 0 }}
-            className="flex items-center gap-1 mr-2 overflow-hidden flex-shrink-0"
+    <div className="flex flex-col gap-2 px-4 py-1.5 bg-surface-container-low border-b border-outline/10">
+      <div className="flex items-center gap-2 w-full min-w-0">
+        <div className="flex items-center gap-1 text-secondary shrink-0">
+          <button
+            onClick={onBack}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="Geri"
+            aria-label="Geri"
           >
-            <NavButton onClick={onBack} title="Back">
-              <ArrowLeft size={16} />
-            </NavButton>
-            <NavButton onClick={onForward} title="Forward">
-              <ArrowRight size={16} />
-            </NavButton>
-            <NavButton onClick={onReload} title="Reload">
-              <RotateCw size={16} />
-            </NavButton>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main Input Area */}
-      <div 
-        ref={omniboxRef}
-        className="flex-1 flex items-center h-full gap-2 px-3 relative"
-      >
-        <Search size={16} className={`flex-shrink-0 ${isFocused ? 'text-accent-blue' : 'text-gray-400'}`} />
-        
-        <input
-          type="text"
-          ref={inputRef}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => {
-            setTimeout(() => {
-              setIsFocused(false);
-              setShowSuggestions(false);
-              setSuggestions([]);
-              setSelectedSuggestion(-1);
-              setInputValue(getDisplayUrl(currentUrl));
-            }, 120);
-          }}
-          placeholder="Search or enter address..."
-          className="flex-1 bg-transparent text-sm text-white placeholder-gray-400 outline-none w-full"
-        />
-
-        {/* Feature Buttons (Fade out on focus) */}
-        <AnimatePresence>
-          {!isFocused && (
-            <motion.div 
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              className="flex items-center gap-1 overflow-hidden flex-shrink-0 ml-2"
-            >
-              <FeatureButton onClick={handleToggleBookmark} active={isBookmarked} title="Bookmark">
-                <Bookmark size={16} fill={isBookmarked ? 'currentColor' : 'none'} />
-              </FeatureButton>
-
-              <button
-                ref={shieldButtonRef}
-                onClick={handleShieldClick}
-                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors relative
-                  ${blockedAds > 0 ? 'text-accent-green hover:bg-accent-green/20' : 'text-gray-400 hover:bg-white/10'}`}
-              >
-                <Shield size={16} />
-                {blockedAds > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-accent-green text-bg-primary text-[9px] font-bold flex items-center justify-center">
-                    {blockedAds > 99 ? '99+' : blockedAds}
-                  </span>
-                )}
-              </button>
-
-              {onOpenDownloads && (
-                <FeatureButton onClick={onOpenDownloads} title="Downloads">
-                  <Download size={16} />
-                </FeatureButton>
-              )}
-              {onOpenPrivacySettings && (
-                <FeatureButton onClick={onOpenPrivacySettings} title="Settings">
-                  <Settings size={16} />
-                </FeatureButton>
-              )}
-              <FeatureButton onClick={onToggleSplitView} title="Split View" active={splitViewActive}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <line x1="12" y1="3" x2="12" y2="21" />
-                </svg>
-              </FeatureButton>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>
+          </button>
+          <button
+            onClick={onForward}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="İleri"
+            aria-label="İleri"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+          </button>
+          <button
+            onClick={onReload}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="Yenile"
+            aria-label="Yenile"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
+          </button>
+          <button
+            onClick={onHome}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="Başlangıç"
+            aria-label="Başlangıç sayfası"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">home</span>
+          </button>
+        </div>
+        <div
+          ref={omniboxRef}
+          className="flex-1 min-w-0 flex items-center px-3 h-8 bg-surface-container-highest rounded-lg border border-transparent focus-within:border-outline-variant transition-colors"
+        >
+          <span className="material-symbols-outlined text-[14px] text-secondary mr-2 flex-shrink-0" aria-hidden="true">
+            {addressIcon}
+          </span>
+          <input
+            type="text"
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => {
+              if (isMouseOverSuggestions) return;
+              setTimeout(() => {
+                if (!isMouseOverSuggestions) {
+                  setIsFocused(false);
+                  setShowSuggestions(false);
+                  setSelectedSuggestion(-1);
+                  setInputValue(getDisplayUrl(currentUrl));
+                }
+              }, 250);
+            }}
+            placeholder="Search with DuckDuckGo or enter address"
+            className="text-xs text-primary flex-1 min-w-0 bg-transparent outline-none w-full truncate placeholder:text-on-surface-variant"
+            role="combobox"
+            aria-label="Adres ve arama çubuğu"
+            aria-expanded={showSuggestions && suggestions.length > 0}
+            aria-controls="omnibox-suggestions"
+            aria-autocomplete="list"
+            aria-activedescendant={selectedSuggestion >= 0 ? `omnibox-suggestion-${selectedSuggestion}` : undefined}
+          />
+          <button
+            onClick={handleToggleBookmark}
+            className="text-secondary text-[16px] ml-2 hover:text-primary transition-colors shrink-0"
+            title="Yer imi"
+            aria-label={isBookmarked ? 'Yer imini kaldır' : 'Yer imi ekle'}
+            aria-pressed={isBookmarked}
+          >
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">{isBookmarked ? 'star' : 'star_border'}</span>
+          </button>
+        </div>
+        <div className="flex items-center gap-1 text-secondary shrink-0">
+          <button
+            onClick={onOpenPrivacySettings}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="Gizlilik Ayarları"
+            aria-label="Gizlilik Ayarları"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">tune</span>
+          </button>
+          <button
+            onClick={onOpenDownloads}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="İndirmeler"
+            aria-label="İndirmeler"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">download</span>
+          </button>
+          <button
+            onClick={onToggleAISidebar}
+            className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors"
+            title="Menü"
+            aria-label="Menü"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">menu</span>
+          </button>
+        </div>
       </div>
 
-      {/* Suggestions Dropdown */}
-      {createPortal(
-        <AnimatePresence>
-          {showSuggestions && suggestions.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.15, type: 'spring', bounce: 0.4 }}
-              className="fixed rounded-2xl overflow-hidden bg-bg-secondary/95 backdrop-blur-xl border border-white/10 shadow-glass-glow"
-              style={{
-                top: suggestPosition.top,
-                left: suggestPosition.left,
-                width: suggestPosition.width,
-                zIndex: 99998,
-              }}
-            >
-              <div className="p-2 space-y-1">
-                {suggestions.map((s, idx) => (
-                  <button
-                    key={`${s.kind}:${s.url}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      navigateTo(s.url);
-                    }}
-                    className={`w-full px-4 py-2.5 rounded-xl flex items-center gap-3 text-left text-sm transition-colors group
-                      ${idx === selectedSuggestion ? 'bg-accent-blue/20 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
-                  >
-                    <Search size={14} className={idx === selectedSuggestion ? 'text-accent-blue' : 'text-gray-500 group-hover:text-gray-400'} />
-                    <span className="flex-1 truncate">{s.title || s.url}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                      {s.kind === 'bookmark' ? 'Bookmark' : 'History'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
+      {showSuggestions && suggestions.length > 0 && (
+        <div
+          id="omnibox-suggestions"
+          role="listbox"
+          aria-label="Adres önerileri"
+          className="fixed overflow-hidden rounded-xl bg-surface-container-highest border border-outline/15 shadow-elev-3 max-w-3xl mx-auto w-full"
+          style={{
+            top: suggestPosition.top,
+            left: suggestPosition.left,
+            width: suggestPosition.width,
+            zIndex: 80,
+          }}
+          onMouseEnter={() => setIsMouseOverSuggestions(true)}
+          onMouseLeave={() => setIsMouseOverSuggestions(false)}
+        >
+          <div className="p-2 space-y-1">
+            {suggestions.map((s, idx) => (
+              <button
+                key={`${s.kind}:${s.kind === 'query' ? s.query : s.url}`}
+                id={`omnibox-suggestion-${idx}`}
+                role="option"
+                aria-selected={idx === selectedSuggestion}
+                onMouseEnter={() => setSelectedSuggestion(idx)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  if (s.kind === 'query') {
+                    setInputValue(s.query);
+                    submitInput(s.query);
+                  } else {
+                    navigateTo(s.url);
+                  }
+                }}
+                className={`w-full px-3 py-2 rounded-md flex items-center gap-3 text-left text-sm transition-colors group
+                  ${idx === selectedSuggestion ? 'bg-primary-container/20 text-primary' : 'text-secondary hover:bg-surface-container-high hover:text-primary'}`}
+              >
+                <span className={`material-symbols-outlined text-[15px] ${idx === selectedSuggestion ? 'text-primary' : 'text-secondary'}`} aria-hidden="true">
+                  search
+                </span>
+                <span className="flex-1 truncate">{s.title || s.url}</span>
+                <span className="text-[10px] uppercase tracking-wider text-on-surface-variant">
+                  {s.kind === 'bookmark' ? 'Bookmark' : s.kind === 'history' ? 'History' : 'Search'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
-
-      {/* Shield Popup */}
-      {createPortal(
-        <AnimatePresence>
-          {showShieldPopup && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              className="shield-popup fixed w-72 rounded-2xl p-4 bg-bg-secondary/95 backdrop-blur-xl border border-white/10 shadow-glass-glow"
-              style={{
-                top: popupPosition.top,
-                left: popupPosition.left - 240, // Offset to right-align roughly
-                zIndex: 99999,
-              }}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-accent-green/20 text-accent-green flex items-center justify-center">
-                  <Shield size={24} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Shield Active</h3>
-                  <p className="text-xs text-accent-green">Blocking trackers</p>
-                </div>
-              </div>
-
-              <div className="rounded-xl p-3 bg-white/5 border border-white/5 flex justify-between items-center mb-4">
-                <span className="text-sm text-gray-400">Blocked Ads</span>
-                <span className="font-bold text-lg text-accent-green">{blockedAds}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
-    </motion.div>
+    </div>
   );
 };
-
-const NavButton = ({ onClick, children, title }: { onClick: () => void, children: React.ReactNode, title: string }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-  >
-    {children}
-  </button>
-);
-
-const FeatureButton = ({ onClick, children, title, active = false }: { onClick: () => void, children: React.ReactNode, title: string, active?: boolean }) => (
-  <button
-    onClick={onClick}
-    title={title}
-    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors
-      ${active ? 'text-accent-blue bg-accent-blue/20' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-  >
-    {children}
-  </button>
-);
 
 export default AddressBar;

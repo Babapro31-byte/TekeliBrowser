@@ -135,27 +135,27 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -20, scale: 0.95 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="fixed top-20 right-4 z-50 w-80"
+        className="fixed top-20 right-4 z-prompt w-80"
       >
-        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-dark-surface/80 backdrop-blur-xl shadow-2xl">
-          {/* Neon glow effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-neon-blue/5 to-neon-purple/5 pointer-events-none" />
-          
+        <div className="relative overflow-hidden rounded-xl border border-outline/15 bg-surface-container-high/85 backdrop-blur-xl shadow-elev-3">
+          {/* Subtle accent glow */}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-secondary/5 pointer-events-none" />
+
           {/* Header */}
-          <div className="relative px-4 py-3 border-b border-white/5">
+          <div className="relative px-4 py-3 border-b border-outline/10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {/* Update icon */}
                 <motion.div
                   animate={status === 'checking' || status === 'downloading' ? { rotate: 360 } : {}}
                   transition={{ duration: 1, repeat: status === 'checking' || status === 'downloading' ? Infinity : 0, ease: 'linear' }}
-                  className="w-5 h-5 text-neon-blue"
+                  className="w-5 h-5 text-primary"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
                   </svg>
                 </motion.div>
-                <span className="text-sm font-medium text-white">
+                <span className="text-sm font-medium text-on-surface">
                   {status === 'checking' && 'Güncelleme kontrol ediliyor...'}
                   {status === 'available' && 'Güncelleme mevcut!'}
                   {status === 'downloading' && 'İndiriliyor...'}
@@ -167,9 +167,10 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
               {/* Close button */}
               <button
                 onClick={handleDismiss}
-                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Bildirimi kapat"
+                className="p-1 rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-highest transition-colors"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
                 </svg>
               </button>
@@ -181,8 +182,8 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
             {/* Update Available */}
             {status === 'available' && updateInfo && (
               <div className="space-y-3">
-                <div className="text-sm text-gray-300">
-                  <span className="text-neon-blue font-semibold">v{updateInfo.version}</span>
+                <div className="text-sm text-on-surface-variant">
+                  <span className="text-primary font-semibold">v{updateInfo.version}</span>
                   {' '}sürümü hazır
                 </div>
                 
@@ -191,7 +192,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleDownload}
-                    className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-neon-blue to-neon-purple text-white text-sm font-medium shadow-lg shadow-neon-blue/20 hover:shadow-neon-blue/40 transition-shadow"
+                    className="flex-1 px-3 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium shadow-elev-2 hover:bg-primary-fixed-dim transition-colors"
                   >
                     İndir
                   </motion.button>
@@ -199,7 +200,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleDismiss}
-                    className="px-3 py-2 rounded-lg bg-white/5 text-gray-300 text-sm hover:bg-white/10 transition-colors"
+                    className="px-3 py-2 rounded-lg bg-surface-container-highest text-on-surface-variant text-sm hover:bg-surface-bright transition-colors"
                   >
                     Sonra
                   </motion.button>
@@ -210,24 +211,24 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
             {/* Downloading */}
             {status === 'downloading' && progress && (
               <div className="space-y-2">
-                <div className="flex justify-between text-xs text-gray-400">
+                <div className="flex justify-between text-xs text-secondary">
                   <span>{formatBytes(progress.transferred)} / {formatBytes(progress.total)}</span>
                   <span>{formatSpeed(progress.bytesPerSecond)}</span>
                 </div>
                 
                 {/* Progress bar */}
-                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${progress.percent}%` }}
-                    className="h-full bg-gradient-to-r from-neon-blue to-neon-purple rounded-full"
-                    style={{ 
-                      boxShadow: '0 0 10px rgba(0, 240, 255, 0.5)'
+                    className="h-full bg-primary rounded-full"
+                    style={{
+                      boxShadow: '0 0 8px rgba(198, 198, 207, 0.4)'
                     }}
                   />
                 </div>
                 
-                <div className="text-center text-xs text-gray-400">
+                <div className="text-center text-xs text-secondary">
                   %{progress.percent.toFixed(0)} tamamlandı
                 </div>
               </div>
@@ -236,7 +237,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
             {/* Downloaded */}
             {status === 'downloaded' && (
               <div className="space-y-3">
-                <div className="text-sm text-gray-300">
+                <div className="text-sm text-on-surface-variant">
                   Güncelleme indirildi. Yüklemek için uygulamayı yeniden başlatın.
                 </div>
                 
@@ -245,7 +246,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleInstall}
-                    className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-neon-blue to-neon-purple text-white text-sm font-medium shadow-lg shadow-neon-blue/20 hover:shadow-neon-blue/40 transition-shadow"
+                    className="flex-1 px-3 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium shadow-elev-2 hover:bg-primary-fixed-dim transition-colors"
                   >
                     Şimdi Yeniden Başlat
                   </motion.button>
@@ -253,7 +254,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleDismiss}
-                    className="px-3 py-2 rounded-lg bg-white/5 text-gray-300 text-sm hover:bg-white/10 transition-colors"
+                    className="px-3 py-2 rounded-lg bg-surface-container-highest text-on-surface-variant text-sm hover:bg-surface-bright transition-colors"
                   >
                     Sonra
                   </motion.button>
@@ -264,7 +265,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
             {/* Error */}
             {status === 'error' && (
               <div className="space-y-3">
-                <div className="text-sm text-red-400">
+                <div className="text-sm text-error">
                   {error || 'Güncelleme sırasında bir hata oluştu.'}
                 </div>
                 
@@ -272,7 +273,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleCheckForUpdates}
-                  className="w-full px-3 py-2 rounded-lg bg-white/5 text-gray-300 text-sm hover:bg-white/10 transition-colors"
+                  className="w-full px-3 py-2 rounded-lg bg-surface-container-highest text-on-surface-variant text-sm hover:bg-surface-bright transition-colors"
                 >
                   Tekrar Dene
                 </motion.button>
@@ -288,7 +289,7 @@ const UpdateNotification = ({ onClose }: UpdateNotificationProps) => {
                       key={i}
                       animate={{ opacity: [0.3, 1, 0.3] }}
                       transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                      className="w-2 h-2 rounded-full bg-neon-blue"
+                      className="w-2 h-2 rounded-full bg-primary"
                     />
                   ))}
                 </div>

@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X, Globe, UserX, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import type { Tab } from '../App';
 import RecentlyClosedMenu from './RecentlyClosedMenu';
-import type { ThemeDef } from '../utils/themes';
 
 interface TabBarProps {
   tabs: Tab[];
@@ -11,190 +9,141 @@ interface TabBarProps {
   onTabClick: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onAddTab: () => void;
-  onAddIncognitoTab?: () => void;
   onReopenTab?: (url: string, title: string) => void;
-  layout?: 'horizontal' | 'vertical';
-  activeTheme?: ThemeDef;
 }
 
-const TabBar = ({ tabs, activeTabId, onTabClick, onTabClose, onAddTab, onAddIncognitoTab, onReopenTab, layout = 'horizontal', activeTheme }: TabBarProps) => {
-  const [isHovered, setIsHovered] = useState(false);
+const TabBar = ({
+  tabs,
+  activeTabId,
+  onTabClick,
+  onTabClose,
+  onAddTab,
+  onReopenTab,
+}: TabBarProps) => {
+  const getTabIcon = (tab: Tab) => {
+    if (tab.url === 'tekeli://newtab') return 'shield';
+    if (tab.url === 'tekeli://downloads') return 'download';
+    if (tab.url === 'tekeli://ayarlar') return 'settings';
+    if (/^https:\/\//i.test(tab.url)) return 'lock';
+    if (/^http:\/\//i.test(tab.url)) return 'language';
+    return 'description';
+  };
 
-  const getFaviconUrl = (url: string) => {
-    if (!url || url.startsWith('tekeli://')) return null;
-    try {
-      const u = new URL(url);
-      return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=32`;
-    } catch {
-      return null;
-    }
+  const renderTab = (tab: Tab) => {
+    const isActive = tab.id === activeTabId;
+    const tabIcon = getTabIcon(tab);
+
+    return (
+      <motion.div
+        key={tab.id}
+        layout
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95, width: 0, padding: 0, margin: 0 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className={`
+          group relative flex items-center h-9 px-4 gap-2 min-w-[160px] max-w-[220px] cursor-pointer
+          rounded-lg transition-all duration-200 ease-in-out
+          ${isActive
+            ? 'bg-surface-container-highest'
+            : 'bg-surface-container-low text-secondary hover:bg-surface-container-highest'}
+        `}
+        onClick={() => onTabClick(tab.id)}
+        role="tab"
+        aria-selected={isActive}
+        tabIndex={isActive ? 0 : -1}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTabClick(tab.id);
+          }
+        }}
+      >
+        {isActive && (
+          <div className="absolute inset-x-3 top-0 h-[2px] bg-primary rounded-full" />
+        )}
+
+        <div className="flex-shrink-0 flex items-center justify-center w-4 h-4">
+          {tab.isLoading ? (
+            <div
+              className="w-3.5 h-3.5 rounded-full border border-outline/40 border-t-primary animate-spin"
+              role="status"
+              aria-label="Yükleniyor"
+            />
+          ) : (
+            <span className="material-symbols-outlined text-[14px] text-secondary" aria-hidden="true">
+              {tabIcon}
+            </span>
+          )}
+        </div>
+
+        <span className={`
+          text-xs font-medium truncate flex-1 transition-colors
+          ${isActive ? 'text-primary' : 'text-secondary group-hover:text-primary'}
+        `}>
+          {tab.title}
+        </span>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onTabClose(tab.id);
+          }}
+          aria-label={`Sekmeyi kapat: ${tab.title}`}
+          className={`
+            ml-auto h-5 w-5 rounded-md flex items-center justify-center
+            opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-100
+            hover:bg-surface-container-low hover:text-primary
+          `}
+        >
+          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
+        </button>
+      </motion.div>
+    );
   };
 
   return (
-    <div 
-      className={` 
-        ${layout === 'vertical' 
-          ? 'h-full flex-col py-4 px-2 flex-shrink-0 transition-all duration-300 ease-spring z-30' 
-          : 'h-12 flex-row items-center px-4 gap-2 border-b'}
-        ${layout === 'vertical' && isHovered ? 'w-[200px]' : layout === 'vertical' ? 'w-[68px]' : 'w-full'}
-        backdrop-blur-md flex overflow-x-auto overflow-y-hidden scrollbar-hide
-        ${activeTheme ? activeTheme.panel : 'bg-transparent border-white/5'}
-      `}
-      onMouseEnter={() => layout === 'vertical' && setIsHovered(true)}
-      onMouseLeave={() => layout === 'vertical' && setIsHovered(false)}
-    >
-      <div className={`flex ${layout === 'vertical' ? 'flex-col gap-1 w-full' : 'flex-row gap-2 h-full items-center'}`}>
-        <AnimatePresence mode="popLayout">
-          {tabs.map((tab) => {
-            const isActive = tab.id === activeTabId;
-            const favUrl = getFaviconUrl(tab.url);
-            
-            return (
-              <motion.div
-                key={tab.id}
-                layout
-                initial={{ opacity: 0, scale: 0.8, x: layout === 'vertical' ? -20 : 0, y: layout === 'vertical' ? 0 : 20 }}
-                animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, width: 0, padding: 0, margin: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className={` 
-                  group relative flex items-center flex-shrink-0 cursor-pointer overflow-hidden transition-all duration-200
-                  ${layout === 'vertical' 
-                    ? `h-12 w-full rounded-xl ${isHovered ? 'px-3 justify-start' : 'justify-center'}` 
-                    : 'h-8 px-3 rounded-lg max-w-[200px] min-w-[120px]'}
-                  ${isActive
-                    ? (activeTheme ? activeTheme.active : 'bg-gradient-to-br from-accent-blue/20 to-accent-purple/20 border border-accent-blue/50 shadow-glass-glow')
-                    : (activeTheme ? `${activeTheme.hover} opacity-70` : 'bg-white/5 hover:bg-white/10 border border-transparent')}
-                `}
-                onClick={() => onTabClick(tab.id)}
-              >
-                {/* Active Indicator (Vertical only) */}
-                {layout === 'vertical' && isActive && !activeTheme && (
-                  <motion.div
-                    layoutId="activeTabIndicatorVertical"
-                    className="absolute left-0 top-1/4 bottom-1/4 w-[3px] bg-accent-blue rounded-r-full shadow-[0_0_8px_rgba(0,240,255,0.8)]"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
+    <div
+      role="tablist"
+      aria-label="Açık sekmeler"
+      className={`
+      h-10 flex-row items-center px-3 gap-1 flex-shrink-0
+      flex overflow-x-auto overflow-y-hidden scrollbar-hide
+      bg-background border-b border-outline/10
+    `}>
+      <AnimatePresence mode="popLayout">
+        {tabs.map(tab => renderTab(tab))}
+      </AnimatePresence>
 
-                {/* Content Container */}
-                <div className={`flex items-center w-full ${layout === 'vertical' && !isHovered ? 'justify-center' : 'gap-2'}`}>
-                  
-                  {/* Icon / Favicon */}
-                  <div className={`flex-shrink-0 flex items-center justify-center rounded-lg transition-transform group-hover:scale-110
-                    ${layout === 'vertical' ? 'w-8 h-8' : 'w-5 h-5'}
-                    ${!favUrl ? (tab.isIncognito ? 'bg-accent-purple/20 text-accent-purple' : 'bg-white/10 text-gray-300') : ''}
-                  `}>
-                    {tab.isLoading ? (
-                      <div className="w-4 h-4 rounded-full border-2 border-accent-blue/30 border-t-accent-blue animate-spin" />
-                    ) : favUrl ? (
-                      <img src={favUrl} alt="" className="w-4 h-4 rounded-sm object-contain" onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                      }} />
-                    ) : tab.isIncognito ? (
-                      <UserX size={layout === 'vertical' ? 16 : 14} />
-                    ) : (
-                      <Globe size={layout === 'vertical' ? 16 : 14} className={favUrl ? 'hidden' : ''} />
-                    )}
-                  </div>
+      <motion.button
+        onClick={onAddTab}
+        aria-label="Yeni sekme"
+        className={`
+          flex-shrink-0 flex items-center justify-center
+          rounded-md text-secondary hover:text-primary hover:bg-surface-container-highest
+          transition-all duration-200 w-8 h-8
+        `}
+        title="Yeni Sekme (Ctrl+T)"
+      >
+        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
+      </motion.button>
 
-                  {/* Title */}
-                  {(layout === 'horizontal' || isHovered) && (
-                    <span className={`text-xs truncate flex-1 transition-colors
-                      ${isActive ? 'font-medium text-white' : 'text-gray-400 group-hover:text-gray-200'}
-                    `}>
-                      {tab.title}
-                    </span>
-                  )}
-                </div>
-
-                {/* Close Button */}
-                {(layout === 'horizontal' || isHovered) && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTabClose(tab.id);
-                    }}
-                    className={` 
-                      absolute right-2 w-5 h-5 rounded-full flex items-center justify-center
-                      opacity-0 group-hover:opacity-100 transition-all
-                      hover:bg-red-500/80 hover:text-white
-                      ${isActive ? 'text-gray-300' : 'text-gray-400'}
-                    `}
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-
-                {/* Active Indicator (Horizontal only) */}
-                {layout === 'horizontal' && isActive && !activeTheme && (
-                  <motion.div
-                    layoutId="activeTabIndicatorHorizontal"
-                    className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-accent-blue to-accent-purple rounded-t-full"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-
-        {/* Tab Actions */}
-        <div className={` 
-          flex flex-shrink-0
-          ${layout === 'vertical' 
-            ? `flex-col gap-2 mt-4 pt-4 border-t border-white/10 ${isHovered ? 'px-2' : 'items-center'}` 
-            : 'flex-row items-center gap-1 ml-2'}
-        `}>
+      {onReopenTab && (
+        <RecentlyClosedMenu onReopen={onReopenTab}>
           <motion.button
-            whileHover={{ scale: 1.05, rotate: 90 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onAddTab}
-            className={` 
-              rounded-xl flex items-center justify-center text-gray-400 transition-colors
-              border border-dashed border-white/20 hover:border-solid hover:border-accent-blue hover:text-accent-blue hover:bg-accent-blue/10
-              ${layout === 'vertical' ? 'w-10 h-10' : 'w-8 h-8'}
+            aria-label="Son kapatılan sekmeler"
+            className={`
+              flex-shrink-0 flex items-center justify-center
+              rounded-md text-secondary hover:text-primary
+              hover:bg-surface-container-highest transition-colors duration-200
+              w-8 h-8
             `}
-            title="Yeni Sekme"
+            title="Son Kapatılanlar (Ctrl+Shift+T)"
           >
-            <Plus size={layout === 'vertical' ? 20 : 16} />
+            <RotateCcw size={16} aria-hidden="true" />
           </motion.button>
-          
-          {onAddIncognitoTab && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onAddIncognitoTab}
-              className={` 
-                rounded-xl flex items-center justify-center text-gray-400 transition-colors
-                hover:text-accent-purple hover:bg-accent-purple/10
-                ${layout === 'vertical' ? 'w-10 h-10' : 'w-8 h-8'}
-              `}
-              title="Yeni Gizli Sekme"
-            >
-              <UserX size={layout === 'vertical' ? 18 : 14} />
-            </motion.button>
-          )}
-
-          {onReopenTab && (
-            <RecentlyClosedMenu onReopen={onReopenTab}>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={` 
-                  rounded-xl flex items-center justify-center text-gray-400 transition-colors
-                  hover:text-white hover:bg-white/10
-                  ${layout === 'vertical' ? 'w-10 h-10' : 'w-8 h-8'}
-                `}
-                title="Son Kapatılanlar"
-              >
-                <RotateCcw size={layout === 'vertical' ? 18 : 14} />
-              </motion.button>
-            </RecentlyClosedMenu>
-          )}
-        </div>
-      </div>
+        </RecentlyClosedMenu>
+      )}
     </div>
   );
 };

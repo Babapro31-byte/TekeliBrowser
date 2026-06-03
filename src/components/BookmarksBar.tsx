@@ -1,15 +1,12 @@
 import { memo, useEffect, useState } from 'react';
+import { Star } from 'lucide-react';
 import type { BookmarkEntry } from '../types/electron';
-import type { ThemeDef, ThemeId } from '../utils/themes';
 
 interface BookmarksBarProps {
   onNavigate: (url: string) => void;
-  activeTheme?: ThemeDef;
-  activeThemeId?: ThemeId;
 }
 
-const BookmarksBar = memo(({ onNavigate, activeThemeId }: BookmarksBarProps) => {
-  const isLight = activeThemeId === 'light';
+const BookmarksBar = memo(({ onNavigate }: BookmarksBarProps) => {
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
 
   useEffect(() => {
@@ -37,33 +34,17 @@ const BookmarksBar = memo(({ onNavigate, activeThemeId }: BookmarksBarProps) => 
   }
 
   return (
-    <div className={`h-10 flex items-center px-4 gap-2 bg-transparent z-40 relative`}>
-      {bookmarks.map((b) => {
-        let domain = '';
-        try { domain = new URL(b.url).hostname; } catch {}
-        
-        return (
-          <button
-            key={b.id}
-            onClick={() => onNavigate(b.url)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-colors backdrop-blur-md border ${
-              isLight 
-                ? 'bg-white/80 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 shadow-sm' 
-                : 'bg-bg-secondary/60 border-white/5 text-gray-300 hover:bg-white/10 hover:text-white shadow-glass hover:border-white/10'
-            }`}
-          >
-            <img 
-              src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} 
-              alt="" 
-              className="w-3.5 h-3.5 rounded-sm"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-            <span className="truncate max-w-[120px]">{b.title || b.url}</span>
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-4 px-4 py-1.5 text-[11px] font-medium tracking-wide text-outline uppercase font-label overflow-x-auto whitespace-nowrap border-b border-outline/10 bg-surface-container-low">
+      {bookmarks.map((b) => (
+        <button
+          key={b.id}
+          onClick={() => onNavigate(b.url)}
+          className="flex items-center gap-1.5 hover:text-primary transition-colors shrink-0"
+        >
+          <Star size={14} fill="currentColor" />
+          <span className="max-w-[180px] truncate">{b.title || b.url}</span>
+        </button>
+      ))}
     </div>
   );
 });

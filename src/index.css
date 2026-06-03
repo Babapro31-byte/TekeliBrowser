@@ -1,6 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Design token defaults (dark theme) ─────────────────────── */
+:root {
+  --color-background: 14 14 16;
+  --color-surface: 14 14 16;
+  --color-surface-dim: 14 14 16;
+  --color-surface-bright: 43 44 50;
+  --color-surface-variant: 37 37 43;
+  --color-surface-container: 25 25 29;
+  --color-surface-container-low: 19 19 22;
+  --color-surface-container-lowest: 0 0 0;
+  --color-surface-container-high: 31 31 36;
+  --color-surface-container-highest: 37 37 43;
+  --color-primary: 198 198 207;
+  --color-primary-container: 69 70 78;
+  --color-primary-fixed: 226 225 235;
+  --color-primary-fixed-dim: 212 211 221;
+  --color-on-primary-container: 198 198 207;
+  --color-secondary: 159 157 161;
+  --color-secondary-container: 59 59 62;
+  --color-secondary-fixed: 228 225 229;
+  --color-secondary-fixed-dim: 214 211 215;
+  --color-tertiary: 251 248 255;
+  --color-tertiary-container: 236 234 243;
+  --color-tertiary-fixed: 239 237 246;
+  --color-tertiary-fixed-dim: 225 222 231;
+  --color-outline: 117 117 124;
+  --color-outline-variant: 71 71 78;
+  --color-on-surface: 231 228 236;
+  --color-on-surface-variant: 172 170 177;
+  --color-on-primary: 63 64 71;
+  --color-on-primary-fixed: 62 63 70;
+  --color-on-primary-fixed-variant: 90 91 99;
+  --color-on-secondary: 32 32 35;
+  --color-on-secondary-container: 193 190 194;
+  --color-on-secondary-fixed: 63 63 66;
+  --color-on-secondary-fixed-variant: 92 91 94;
+  --color-on-tertiary: 95 94 102;
+  --color-on-tertiary-container: 86 86 93;
+  --color-on-tertiary-fixed: 70 70 77;
+  --color-on-tertiary-fixed-variant: 98 98 105;
+  --color-error: 238 125 119;
+  --color-error-dim: 187 85 81;
+  --color-error-container: 127 41 39;
+  --color-on-error: 73 1 6;
+  --color-on-error-container: 255 153 147;
+  --color-inverse-surface: 252 248 251;
+  --color-inverse-on-surface: 86 84 87;
+  --color-inverse-primary: 94 94 103;
+}
+
+/* ── Light theme ─────────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-background: 248 248 250;
+  --color-surface: 248 248 250;
+  --color-surface-dim: 238 238 242;
+  --color-surface-bright: 255 255 255;
+  --color-surface-variant: 244 244 248;
+  --color-surface-container: 241 241 244;
+  --color-surface-container-low: 245 245 248;
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-high: 236 236 240;
+  --color-surface-container-highest: 228 228 233;
+  --color-primary: 50 50 65;
+  --color-primary-container: 220 220 232;
+  --color-on-primary-container: 30 30 50;
+  --color-secondary: 85 85 100;
+  --color-secondary-container: 215 215 228;
+  --color-tertiary: 20 20 30;
+  --color-tertiary-container: 232 231 240;
+  --color-outline: 148 148 160;
+  --color-outline-variant: 200 200 212;
+  --color-on-surface: 20 20 28;
+  --color-on-surface-variant: 75 75 90;
+  --color-on-primary: 240 240 248;
+  --color-error: 176 0 32;
+  --color-error-container: 255 218 214;
+  --color-on-error: 255 255 255;
+  --color-on-error-container: 65 0 2;
+  --color-inverse-surface: 30 30 38;
+  --color-inverse-on-surface: 220 218 228;
+  --color-inverse-primary: 198 198 207;
+}
+
+/* ── OLED theme (pure black) ─────────────────────────────────── */
+[data-theme="oled"] {
+  --color-background: 0 0 0;
+  --color-surface: 0 0 0;
+  --color-surface-dim: 0 0 0;
+  --color-surface-bright: 28 28 35;
+  --color-surface-variant: 18 18 24;
+  --color-surface-container: 9 9 14;
+  --color-surface-container-low: 6 6 10;
+  --color-surface-container-lowest: 0 0 0;
+  --color-surface-container-high: 13 13 18;
+  --color-surface-container-highest: 18 18 24;
+  --color-primary: 215 215 225;
+  --color-primary-container: 55 56 68;
+  --color-on-primary-container: 215 215 225;
+  --color-secondary: 155 153 162;
+  --color-outline: 88 88 98;
+  --color-outline-variant: 45 45 55;
+  --color-on-surface: 245 242 252;
+  --color-on-surface-variant: 180 178 190;
+}
+
+/* ── Accent overrides (cascade after theme blocks) ───────────── */
+[data-accent="amber"] {
+  --color-primary: 245 158 11;
+  --color-primary-container: 120 53 15;
+  --color-on-primary-container: 254 215 170;
+}
+
+[data-accent="indigo"] {
+  --color-primary: 129 140 248;
+  --color-primary-container: 55 48 163;
+  --color-on-primary-container: 199 210 254;
+}
+
+[data-accent="emerald"] {
+  --color-primary: 52 211 153;
+  --color-primary-container: 6 78 59;
+  --color-on-primary-container: 167 243 208;
+}
+
+[data-accent="rose"] {
+  --color-primary: 251 113 133;
+  --color-primary-container: 159 18 57;
+  --color-on-primary-container: 254 205 211;
+}
+
+/* ── User-requested reduced motion ───────────────────────────── */
+[data-reduced-motion="true"] *,
+[data-reduced-motion="true"] *::before,
+[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
 
 * {
   margin: 0;
@@ -8,13 +150,13 @@
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+html, body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-on-surface));
 }
 
 #root {
@@ -23,79 +165,126 @@ body {
   overflow: hidden;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #25252b; border-radius: 10px; }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #25252b transparent;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(26, 26, 46, 0.5);
+*:focus {
+  outline: none;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 240, 255, 0.3);
-  border-radius: 4px;
+/* Klavye kullanıcıları için belirgin focus halkası (erişilebilirlik - kritik). */
+*:focus-visible {
+  outline: 2px solid rgba(198, 198, 207, 0.75);
+  outline-offset: 2px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 240, 255, 0.5);
+::selection {
+  background-color: rgba(198, 198, 207, 0.18);
+  color: #e7e4ec;
 }
 
-/* Glassmorphism effect */
-.glass {
-  background: rgba(26, 26, 46, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Neon glow effect */
-.neon-glow {
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3),
-              0 0 20px rgba(0, 240, 255, 0.2),
-              0 0 30px rgba(176, 38, 255, 0.1);
-}
-
-.neon-glow:hover {
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.5),
-              0 0 30px rgba(0, 240, 255, 0.3),
-              0 0 45px rgba(176, 38, 255, 0.2);
-}
-
-/* Green neon glow for shield */
-.neon-glow-green {
-  box-shadow: 0 0 10px rgba(52, 211, 153, 0.3),
-              0 0 20px rgba(52, 211, 153, 0.2),
-              0 0 30px rgba(20, 184, 166, 0.1);
-}
-
-.neon-glow-green:hover {
-  box-shadow: 0 0 15px rgba(52, 211, 153, 0.5),
-              0 0 30px rgba(52, 211, 153, 0.3),
-              0 0 45px rgba(20, 184, 166, 0.2);
-}
-
-/* Webview styles */
 webview {
   width: 100%;
   height: 100%;
+  flex: 1 1 auto;
   border: none;
+  /* display:flex, webview'in iç iframe'inin kapsayıcıyı tam doldurmasını sağlar.
+     display:block bazı durumlarda iç içeriğin yüksekliğinin çökmesine yol açıyordu. */
+  display: flex;
 }
 
-/* Hide scrollbar for elements with scrollbar-hide */
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-
-/* For IE, Edge and Firefox */
 .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+input, textarea {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+a {
+  color: #c6c6cf;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.webview {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.flare-gradient {
+  background: linear-gradient(to right, #c6c6cf, #9f9da1);
+}
+
+.flare-gradient-vertical {
+  background: linear-gradient(to bottom, #c6c6cf, #9f9da1);
+}
+
+.heat-shadow {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.heat-shadow-lg {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel {
+  background: rgba(69, 70, 78, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.glass-panel-strong {
+  background: rgba(37, 37, 43, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+/* Hareket hassasiyeti: kullanıcı azaltılmış hareket istiyorsa CSS animasyon/geçişleri
+   neredeyse anlık hale getir. (Framer Motion ayrıca App'teki MotionConfig ile yönetilir.) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

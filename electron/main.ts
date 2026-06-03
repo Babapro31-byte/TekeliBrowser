@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, session, Menu, clipboard } from 'electron';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import * as path from 'path';
 import * as fs from 'fs';
 import { ElectronBlocker } from '@ghostery/adblocker-electron';
 import fetch from 'cross-fetch';
@@ -12,14 +11,13 @@ import { initSessionManager } from './sessionManager.js';
 import { initHistoryManager } from './historyManager.js';
 import { initBookmarksManager } from './bookmarksManager.js';
 import { initOmniboxManager } from './omniboxManager.js';
+import { initAuthManager } from './authManager.js';
+import { initSpacesManager } from './spacesManager.js';
 import { initIncognitoManager, createIncognitoPartition, clearIncognitoSession } from './incognitoManager.js';
 import { getSiteFromUrl, getPermission, setPermission, getAllPermissions, clearPermission } from './permissionManager.js';
 import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting, getSearchEngine, setSearchEngine, getDoHProvider, setDoHProvider, getHttpsOnly, setHttpsOnly, getFingerprintDefender, setFingerprintDefender } from './settingsManager.js';
 import { isValidSender } from './ipcValidation.js';
 import { initializeAdvancedFeatures } from './advancedFeatures.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let ghosteryBlocker: ElectronBlocker | null = null;
@@ -469,6 +467,24 @@ function setupNavigationGuards() {
         if (input.shift && input.key === 'Tab') {
           event.preventDefault();
           mainWindow.webContents.send('keyboard-shortcut', { action: 'prev-tab' });
+          return;
+        }
+
+        if (!input.shift && (input.key === '=' || input.key === '+')) {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'zoom-in' });
+          return;
+        }
+
+        if (!input.shift && input.key === '-') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'zoom-out' });
+          return;
+        }
+
+        if (!input.shift && input.key === '0') {
+          event.preventDefault();
+          mainWindow.webContents.send('keyboard-shortcut', { action: 'zoom-reset' });
           return;
         }
       });
@@ -988,11 +1004,37 @@ app.on('web-contents-created', (_, contents) => {
         mainWindow?.webContents.send('keyboard-shortcut', { action: 'prev-tab' });
         return;
       }
+
+      // Ctrl+= or Ctrl++ - Zoom in
+      if (ctrl && !input.shift && (input.key === '=' || input.key === '+')) {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'zoom-in' });
+        return;
+      }
+
+      // Ctrl+- - Zoom out
+      if (ctrl && !input.shift && input.key === '-') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'zoom-out' });
+        return;
+      }
+
+      // Ctrl+0 - Reset zoom
+      if (ctrl && !input.shift && input.key === '0') {
+        event.preventDefault();
+        mainWindow?.webContents.send('keyboard-shortcut', { action: 'zoom-reset' });
+        return;
+      }
     });
   }
 });
 
 app.whenReady().then(async () => {
+  const dbReady = await initDatabase();
+  if (!dbReady) {
+    console.error('[TekeliBrowser] Database initialization failed; some features may be unavailable');
+  }
+
   applyPerformanceFlags();
   setupNavigationGuards();
   setupPermissionHandler();
@@ -1004,6 +1046,8 @@ app.whenReady().then(async () => {
   initHistoryManager();
   initBookmarksManager();
   initOmniboxManager();
+  initAuthManager();
+  initSpacesManager();
   initIncognitoManager();
   initializeAdvancedFeatures();
 

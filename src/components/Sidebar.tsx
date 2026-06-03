@@ -1,103 +1,106 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Briefcase, Shield, Bookmark, Clock, Download, ChevronDown, LayoutGrid } from 'lucide-react';
-import type { ThemeDef } from '../utils/themes';
+import { Bookmark, History, Download, Settings, Menu } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
   onToggle?: () => void;
-  activeTheme?: ThemeDef;
+  onOpenSettings?: () => void;
+  onOpenDownloads?: () => void;
+  onOpenHistory?: () => void;
+  onOpenBookmarks?: () => void;
 }
 
-const Sidebar = ({ isOpen }: SidebarProps) => {
+const Sidebar = ({ 
+  isOpen, 
+  onToggle,
+  onOpenSettings,
+  onOpenDownloads,
+  onOpenHistory,
+  onOpenBookmarks,
+}: SidebarProps) => {
+  const navItems = [
+    { icon: Bookmark, label: 'Bookmarks', onClick: onOpenBookmarks },
+    { icon: History, label: 'History', onClick: onOpenHistory },
+    { icon: Download, label: 'Downloads', onClick: onOpenDownloads },
+    { icon: Settings, label: 'Settings', onClick: onOpenSettings },
+  ];
+
   return (
     <AnimatePresence>
-      {isOpen && (
+      {!isOpen ? (
+        <motion.button
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 10 }}
+          transition={{ duration: 0.2 }}
+          onClick={onToggle}
+          aria-label="Kenar çubuğunu aç"
+          aria-expanded={false}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-overlay w-7 h-20 flex items-center justify-center rounded-l-md bg-surface-container-low border border-r-0 border-outline/15 hover:bg-surface-container-highest transition-colors cursor-pointer"
+        >
+          <Menu size={14} className="text-secondary" aria-hidden="true" />
+        </motion.button>
+      ) : (
         <motion.div
           initial={{ width: 0, opacity: 0 }}
-          animate={{ width: 280, opacity: 1 }}
+          animate={{ width: 256, opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="h-full flex-shrink-0 bg-bg-secondary/95 backdrop-blur-lg border-r border-white/5 flex flex-col overflow-hidden text-gray-300 relative z-20"
+          className="h-full flex-shrink-0 flex flex-col overflow-hidden relative z-20 border-l border-outline/10 bg-surface-container-low"
+          style={{
+            minWidth: 0,
+          }}
+          role="complementary"
+          aria-label="Kenar çubuğu"
         >
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
-            
-            {/* Profile */}
-            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center text-white font-semibold shadow-glow">
-                U
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">User Profile</p>
-                <p className="text-xs text-gray-500 truncate">Syncing to cloud</p>
-              </div>
-              <ChevronDown size={16} className="text-gray-500" />
+          <div className="mb-8 flex flex-col items-center px-4 pt-6">
+            <div className="w-10 h-10 rounded-md flex items-center justify-center bg-surface-container-highest">
+              <span className="material-symbols-outlined text-primary text-[18px]" aria-hidden="true">grid_view</span>
             </div>
-
-            {/* Spaces */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-500 px-2 tracking-wider flex items-center gap-2">
-                <LayoutGrid size={12} /> SPACES
-              </h3>
-              <div className="flex gap-2 px-2">
-                <button className="flex-1 py-1.5 px-3 rounded-lg bg-accent-blue/20 text-accent-blue text-sm border border-accent-blue/30 hover:bg-accent-blue/30 transition-colors flex items-center justify-center gap-2">
-                  <Home size={14} /> Personal
-                </button>
-                <button className="flex-1 py-1.5 px-3 rounded-lg bg-white/5 text-gray-400 text-sm border border-white/10 hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
-                  <Briefcase size={14} /> Work
-                </button>
-              </div>
+            <div className="mt-4 text-center">
+              <h2 className="font-headline font-bold text-primary tracking-tight">Workspace</h2>
+              <p className="text-[10px] text-secondary uppercase tracking-[0.24em] font-label">Tekeli Workspace</p>
             </div>
-
-            {/* Pinned */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-500 px-2 tracking-wider">PINNED</h3>
-              <div className="space-y-1">
-                {['GitHub', 'Gmail', 'Notion'].map(item => (
-                  <div key={item} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group">
-                    <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center text-xs group-hover:scale-110 transition-transform">
-                      {item[0]}
-                    </div>
-                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Navigation */}
-            <div className="space-y-1 pt-2 border-t border-white/5">
-              {[
-                { icon: Bookmark, label: 'Bookmarks' },
-                { icon: Clock, label: 'History' },
-                { icon: Download, label: 'Downloads' },
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group">
-                  <item.icon size={18} className="text-gray-400 group-hover:text-accent-blue transition-colors" />
-                  <span className="text-sm text-gray-300 group-hover:text-white transition-colors">{item.label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Privacy Dashboard */}
-            <div className="mt-auto pt-6">
-              <div className="p-4 rounded-xl bg-bg-tertiary/50 border border-white/5 border-l-4 border-l-accent-green">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield size={16} className="text-accent-green" />
-                  <h4 className="text-sm font-medium text-white">Privacy Status</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-center">
-                  <div className="bg-bg-primary/50 p-2 rounded-lg">
-                    <p className="text-lg font-semibold text-white">1.2k</p>
-                    <p className="text-[10px] text-gray-500 uppercase">Blocked</p>
-                  </div>
-                  <div className="bg-bg-primary/50 p-2 rounded-lg">
-                    <p className="text-lg font-semibold text-white">45<span className="text-xs">MB</span></p>
-                    <p className="text-[10px] text-gray-500 uppercase">Saved</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
           </div>
+
+          <nav aria-label="Çalışma alanı" className="flex flex-col gap-2 px-4 flex-1 font-body text-sm font-medium">
+            <button
+              onClick={onOpenBookmarks}
+              className="flex items-center gap-3 px-3 py-3 text-primary bg-surface-container-highest rounded-md cursor-pointer group transition-all duration-200 ease-in-out"
+            >
+              <Bookmark size={18} aria-hidden="true" />
+              <span>Bookmarks</span>
+            </button>
+
+            {navItems.slice(1).map((item) => (
+              <button
+                key={item.label}
+                onClick={item.onClick}
+                className="flex items-center gap-3 px-3 py-3 text-secondary hover:text-primary hover:bg-surface-container-high rounded-md cursor-pointer group transition-all duration-200 ease-in-out"
+              >
+                <item.icon size={18} aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="mt-auto pt-6 px-4 pb-4">
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-3 px-3 py-3 text-secondary hover:text-primary hover:bg-surface-container-high rounded-md cursor-pointer group transition-all duration-200 ease-in-out w-full"
+            >
+              <Settings size={18} aria-hidden="true" />
+              <span>Settings</span>
+            </button>
+          </div>
+
+          <button
+            onClick={onToggle}
+            aria-label="Kenar çubuğunu kapat"
+            className="mx-4 mb-4 py-3 text-primary font-medium rounded-md bg-surface-container-highest transition-colors hover:bg-surface-bright"
+          >
+            Kapat
+          </button>
         </motion.div>
       )}
     </AnimatePresence>

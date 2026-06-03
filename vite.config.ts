@@ -48,11 +48,19 @@ export default defineConfig({
       electron([
         {
           entry: 'electron/main.ts',
+          onstart(options) {
+            options.reload();
+          },
           vite: {
             build: {
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron']
+                external: ['electron', 'electron/main'],
+                output: {
+                  format: 'cjs',
+                  entryFileNames: '[name].cjs',
+                  exports: 'default'
+                }
               }
             },
             plugins: [copyPreloadFiles()]
@@ -64,7 +72,11 @@ export default defineConfig({
             build: {
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron']
+                external: ['electron', 'electron/main'],
+                output: {
+                  format: 'cjs',
+                  entryFileNames: '[name].cjs'
+                }
               }
             }
           }

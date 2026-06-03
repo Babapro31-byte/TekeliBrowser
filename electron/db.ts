@@ -71,6 +71,25 @@ export async function initDatabase(): Promise<boolean> {
       );
       CREATE INDEX IF NOT EXISTS idx_bookmarks_created_at ON bookmarks(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_bookmarks_title ON bookmarks(title);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_login_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+      CREATE TABLE IF NOT EXISTS search_queries (
+        query TEXT PRIMARY KEY,
+        last_used INTEGER NOT NULL,
+        use_count INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE INDEX IF NOT EXISTS idx_search_queries_last_used ON search_queries(last_used DESC);
     `);
 
     flushDatabase();

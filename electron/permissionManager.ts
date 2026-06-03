@@ -112,5 +112,10 @@ export function clearPermission(site?: string, permission?: string): void {
   savePermissions();
 }
 
-// Load on init
-loadPermissions();
+// Initialize - must be called after app is ready
+let initialized = false;
+export function initPermissionManager(): void {
+  if (initialized) return;
+  initialized = true;
+  loadPermissions();
+}

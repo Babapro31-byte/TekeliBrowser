@@ -1,12 +1,4 @@
-import { motion } from 'framer-motion';
-import type { ThemeDef } from '../utils/themes';
-
-interface TitlebarProps {
-  activeTheme?: ThemeDef;
-}
-
-const Titlebar = ({ activeTheme }: TitlebarProps) => {
-  const isLight = activeTheme?.id === 'light';
+const Titlebar = () => {
   const handleMinimize = () => {
     if (window.electron) {
       window.electron.minimizeWindow();
@@ -26,73 +18,38 @@ const Titlebar = ({ activeTheme }: TitlebarProps) => {
   };
 
   return (
-    <div 
-      className={`h-8 backdrop-blur-md flex items-center justify-between pl-4 pr-1 border-b ${
-        activeTheme 
-          ? `${activeTheme.panel}` 
-          : 'bg-dark-surface/80 border-neon-blue/10'
-      }`}
-      style={{ WebkitAppRegion: 'drag' } as any}
-    >
-      {/* Logo and Title */}
-      <div className="flex items-center space-x-2">
-        <motion.div
-          className={`w-5 h-5 rounded ${
-            activeTheme 
-              ? (isLight ? 'bg-gradient-to-br from-slate-600 to-slate-800' : 'bg-gradient-to-br from-neon-blue to-neon-purple') 
-              : 'bg-gradient-to-br from-neon-blue to-neon-purple'
-          }`}
-          animate={isLight ? {} : { 
-            boxShadow: [
-              '0 0 5px rgba(0, 240, 255, 0.5)',
-              '0 0 15px rgba(176, 38, 255, 0.5)',
-              '0 0 5px rgba(0, 240, 255, 0.5)'
-            ]
-          }}
-          transition={{ duration: 2, repeat: Infinity }}
-        />
-        <span className={`text-sm font-semibold ${isLight ? 'text-slate-800' : 'text-white/90'}`}>TekeliBrowser</span>
+    <header className="flex items-center justify-between w-full h-12 pl-4 bg-background text-on-surface select-none flex-shrink-0 border-b border-outline/10">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-extrabold tracking-[-0.12em] text-primary">TEKELI</span>
       </div>
-      
-      {/* Window Controls */}
-      <div 
-        className="flex items-center space-x-2"
-        style={{ WebkitAppRegion: 'no-drag' } as any}
-      >
-        <motion.button
-          whileHover={{ scale: 1.1, backgroundColor: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 240, 255, 0.1)' }}
-          whileTap={{ scale: 0.95 }}
+
+      <div className="flex items-stretch h-full">
+        <button
           onClick={handleMinimize}
-          className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${isLight ? 'text-slate-500 hover:text-slate-800' : 'text-white/70 hover:text-white'}`}
+          className="h-full w-12 flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-highest transition-colors cursor-pointer"
+          title="Küçült"
+          aria-label="Küçült"
         >
-          <svg width="12" height="2" viewBox="0 0 12 2" fill="currentColor">
-            <rect width="12" height="2" />
-          </svg>
-        </motion.button>
-        
-        <motion.button
-          whileHover={{ scale: 1.1, backgroundColor: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 240, 255, 0.1)' }}
-          whileTap={{ scale: 0.95 }}
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">remove</span>
+        </button>
+        <button
           onClick={handleMaximize}
-          className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${isLight ? 'text-slate-500 hover:text-slate-800' : 'text-white/70 hover:text-white'}`}
+          className="h-full w-12 flex items-center justify-center text-secondary hover:text-primary hover:bg-surface-container-highest transition-colors cursor-pointer"
+          title="Büyüt"
+          aria-label="Büyüt / Geri Yükle"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="1" y="1" width="10" height="10" />
-          </svg>
-        </motion.button>
-        
-        <motion.button
-          whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 50, 50, 0.2)' }}
-          whileTap={{ scale: 0.95 }}
+          <span className="material-symbols-outlined text-[16px]" aria-hidden="true">check_box_outline_blank</span>
+        </button>
+        <button
           onClick={handleClose}
-          className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${isLight ? 'text-slate-500 hover:text-red-500' : 'text-white/70 hover:text-red-400'}`}
+          className="h-full w-12 flex items-center justify-center text-secondary hover:bg-error-container hover:text-on-error-container transition-colors cursor-pointer"
+          title="Kapat"
+          aria-label="Kapat"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M1 1L11 11M11 1L1 11" />
-          </svg>
-        </motion.button>
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+        </button>
       </div>
-    </div>
+    </header>
   );
 };
 

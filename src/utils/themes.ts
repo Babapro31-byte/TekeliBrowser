@@ -1,7 +1,6 @@
-
-export type ThemeColor = 'indigo' | 'blue' | 'emerald' | 'yellow' | 'rose' | 'cyan' | 'fuchsia' | 'orange';
+export type ThemeColor = 'indigo' | 'blue' | 'emerald' | 'yellow' | 'rose' | 'cyan' | 'fuchsia' | 'orange' | 'solaris';
 export type PrivacyLevel = 'off' | 'standard' | 'strict';
-export type ThemeId = 'neon' | 'zen' | 'cyberpunk' | 'terminal' | 'light';
+export type ThemeId = 'dark' | 'light' | 'oled' | 'solaris';
 
 export type ColorClass = {
   name: string;
@@ -33,6 +32,7 @@ export type ThemeDef = {
   accent: string;
   border: string;
   input: string;
+  type: 'dark' | 'light';
 };
 
 export const colorClasses: Record<ThemeColor, ColorClass> = {
@@ -179,68 +179,78 @@ export const colorClasses: Record<ThemeColor, ColorClass> = {
     lightAccent: 'text-orange-600',
     lightBgLow: 'bg-orange-50',
     lightHover: 'hover:bg-orange-100 hover:text-orange-700'
+  },
+  solaris: {
+    name: 'Solaris Amber',
+    bg: 'bg-primary-container',
+    accent: 'text-primary',
+    borderFull: 'border-primary-container',
+    borderHalf: 'border-primary-container/50',
+    borderLow: 'border-primary-container/30',
+    bgLow: 'bg-primary-container/10',
+    bgMed: 'bg-primary-container/20',
+    bgHigh: 'bg-solaris-surface-container-high',
+    hover: 'hover:bg-solaris-surface-container-high hover:text-primary',
+    shadowOuter: 'shadow-[0_0_30px_rgba(255,191,0,0.15)]',
+    shadowInner: 'shadow-[inset_0_0_10px_rgba(255,191,0,0.2)]',
+    shadowGlow: 'shadow-[0_0_15px_rgba(255,191,0,0.3)]',
+    lightAccent: 'text-amber-600',
+    lightBgLow: 'bg-amber-50',
+    lightHover: 'hover:bg-amber-100 hover:text-amber-700'
   }
 };
 
-export const getThemes = (activeColor: ColorClass): Record<ThemeId, ThemeDef> => ({
-  neon: {
-    id: 'neon',
-    name: 'Neon Glass',
-    desc: 'Canlı renkler, bulanık arka plan.',
-    window: `bg-slate-900/90 backdrop-blur-xl ${activeColor.borderLow} ${activeColor.shadowOuter} text-white`,
-    panel: `bg-slate-800/80 backdrop-blur-md ${activeColor.borderLow}`,
-    hover: `${activeColor.hover} transition-all duration-300`,
-    active: `${activeColor.accent} ${activeColor.borderFull} ${activeColor.shadowInner} ${activeColor.bgLow}`,
-    accent: activeColor.accent,
-    border: activeColor.borderLow,
-    input: `bg-slate-900/80 ${activeColor.borderLow} focus-within:${activeColor.borderFull} focus-within:${activeColor.shadowGlow} text-white`
-  },
-  zen: {
-    id: 'zen',
-    name: 'Zen / Libre',
-    desc: 'Sıfır efekt, mat renkler, tam odak.',
-    window: 'bg-zinc-950 border-zinc-800 shadow-2xl text-zinc-100',
-    panel: 'bg-zinc-900 border-zinc-800',
-    hover: 'hover:bg-zinc-800 transition-none',
-    active: 'text-zinc-50 border-zinc-500 bg-zinc-800',
-    accent: 'text-zinc-300',
-    border: 'border-zinc-800',
-    input: 'bg-zinc-950 border-zinc-700 focus-within:border-zinc-500 text-white'
-  },
-  cyberpunk: {
-    id: 'cyberpunk',
-    name: 'Cyberpunk',
-    desc: 'Yüksek kontrast, renkli neon kenarlıklar.',
-    window: `bg-yellow-950/90 backdrop-blur-md ${activeColor.borderHalf} shadow-[0_0_20px_rgba(0,0,0,0.5)] text-yellow-50`,
-    panel: `bg-black/80 ${activeColor.borderLow}`,
-    hover: `${activeColor.hover} transition-all`,
-    active: `${activeColor.accent} ${activeColor.borderFull} ${activeColor.shadowGlow} ${activeColor.bgMed}`,
-    accent: activeColor.accent,
-    border: activeColor.borderHalf,
-    input: `bg-black/80 ${activeColor.borderHalf} focus-within:${activeColor.borderFull} focus-within:${activeColor.shadowGlow} text-yellow-100`
-  },
-  terminal: {
-    id: 'terminal',
-    name: 'Hacker Terminal',
-    desc: 'Siyah zemin, monospaced font.',
-    window: `bg-black ${activeColor.borderHalf} shadow-none ${activeColor.accent} font-mono text-green-400`,
-    panel: `bg-black ${activeColor.borderHalf}`,
-    hover: `${activeColor.hover} transition-none`,
-    active: `${activeColor.accent} ${activeColor.borderFull} ${activeColor.bgHigh}`,
-    accent: activeColor.accent,
-    border: activeColor.borderHalf,
-    input: `bg-black ${activeColor.borderHalf} focus-within:${activeColor.borderFull} text-green-400`
+export const getThemes = (): Record<ThemeId, ThemeDef> => ({
+  dark: {
+    id: 'dark',
+    name: 'Dark',
+    desc: 'Modern koyu tema',
+    window: 'bg-bg-primary text-text-primary',
+    panel: 'bg-bg-secondary border-border-subtle',
+    hover: 'hover:bg-bg-hover transition-colors',
+    active: 'bg-bg-elevated border-accent text-accent',
+    accent: 'text-accent',
+    border: 'border-accent/20',
+    input: 'bg-bg-tertiary border-border-medium focus:border-accent text-text-primary',
+    type: 'dark'
   },
   light: {
     id: 'light',
-    name: 'Aydınlık Mod',
-    desc: 'Gündüz kullanımı için ferah tasarım.',
-    window: 'bg-white/95 backdrop-blur-xl border-slate-200 shadow-xl text-slate-900',
-    panel: 'bg-slate-50/90 backdrop-blur-md border-slate-200',
-    hover: `${activeColor.lightHover} transition-all`,
-    active: `${activeColor.lightAccent} ${activeColor.borderFull} ${activeColor.lightBgLow}`,
-    accent: activeColor.lightAccent,
+    name: 'Light',
+    desc: 'Aydınlık tema',
+    window: 'bg-white text-slate-900',
+    panel: 'bg-slate-50 border-slate-200',
+    hover: 'hover:bg-slate-100 transition-colors',
+    active: 'bg-white border-violet-500 text-violet-600',
+    accent: 'text-violet-600',
     border: 'border-slate-200',
-    input: `bg-white border-slate-300 focus-within:${activeColor.borderFull} focus-within:${activeColor.shadowGlow} text-slate-900`
+    input: 'bg-white border-slate-300 focus:border-violet-500 text-slate-900',
+    type: 'light'
+  },
+  oled: {
+    id: 'oled',
+    name: 'OLED',
+    desc: 'Tam siyah (OLED ekranlar için)',
+    window: 'bg-black text-white',
+    panel: 'bg-[#0A0A0A] border-[#1A1A1A]',
+    hover: 'hover:bg-[#141414] transition-colors',
+    active: 'bg-[#1A1A1A] border-accent text-accent',
+    accent: 'text-accent',
+    border: 'border-[#1A1A1A]',
+    input: 'bg-[#0A0A0A] border-[#333333] focus:border-accent text-white',
+    type: 'dark'
+  },
+  solaris: {
+    id: 'solaris',
+    name: 'Solaris',
+    desc: 'Celestial Editorial - Amber/Sunset theme',
+    window: 'bg-solaris-background text-solaris-on-surface',
+    panel: 'bg-solaris-surface-container-low border-solaris-outline/15',
+    hover: 'hover:bg-solaris-surface-container-high transition-colors',
+    active: 'bg-solaris-surface-container-highest border-solaris-primary-container text-solaris-primary',
+    accent: 'text-solaris-primary',
+    border: 'border-solaris-outline/15',
+    input: 'bg-solaris-surface-container-lowest border-solaris-outline-variant focus:border-solaris-primary text-solaris-on-surface',
+    type: 'dark'
   }
 });

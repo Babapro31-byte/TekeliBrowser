@@ -117,4 +117,10 @@ export function setFingerprintDefender(enabled: boolean): void {
   saveSettings();
 }
 
-loadSettings();
+// Initialize - must be called after app is ready
+let initialized = false;
+export function initSettingsManager(): void {
+  if (initialized) return;
+  initialized = true;
+  loadSettings();
+}

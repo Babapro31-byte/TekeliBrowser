@@ -43,6 +43,16 @@ function looksLikeHostname(input: string): boolean {
   return true;
 }
 
+export function isSearchQueryInput(raw: string): boolean {
+  const input = raw.trim();
+  if (!input) return false;
+  if (input.startsWith('tekeli://')) return false;
+  if (input.startsWith('about:')) return false;
+  if (hasUrlScheme(input)) return false;
+  if (looksLikeHostname(input)) return false;
+  return true;
+}
+
 export function resolveOmniboxInput(raw: string, engine: SearchEngine): string {
   const input = raw.trim();
   if (!input) return '';

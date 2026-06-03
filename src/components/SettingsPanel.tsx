@@ -1,545 +1,555 @@
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Activity,
-  EyeOff,
-  Fingerprint,
-  Image as ImageIcon,
-  Layout,
-  Lock,
-  ShieldCheck,
-  Trash2,
-  Palette
-} from 'lucide-react';
-import type { ThemeColor, PrivacyLevel, ThemeId } from '../utils/themes';
-import { colorClasses, getThemes } from '../utils/themes';
+import { useState, useEffect, useCallback } from 'react';
+import type { SearchEngine } from '../types/electron';
+import { applyTheme, type ThemeId, type AccentId } from '../utils/theme';
 
-export type { ThemeColor, PrivacyLevel, ThemeId };
-export type TabLayout = 'horizontal' | 'vertical';
+interface SettingsPanelProps {
+  initialSection?: string;
+}
 
-type SettingsPanelProps = {
-  themeColor: ThemeColor;
-  setThemeColor: (next: ThemeColor) => void;
-  privacyLevel: PrivacyLevel;
-  setPrivacyLevel: (next: PrivacyLevel) => void;
-  tabLayout: TabLayout;
-  setTabLayout: (next: TabLayout) => void;
-  activeThemeId: ThemeId;
-  setActiveThemeId: (next: ThemeId) => void;
+type CookiePolicy = 'all' | 'block-third-party' | 'block-all';
+
+const PERMISSION_LABELS: Record<string, string> = {
+  media: 'Kamera / Mikrofon',
+  microphone: 'Mikrofon',
+  camera: 'Kamera',
+  geolocation: 'Konum',
+  notifications: 'Bildirimler',
 };
 
-// Individual privacy feature toggles
-type PrivacyFeatures = {
-  trackerBlocker: boolean;
-  httpsOnly: boolean;
-  fingerprintProtection: boolean;
-  cookieIsolation: boolean;
-};
+const SECTIONS = [
+  { id: 'general', label: 'Genel', icon: 'tune' },
+  { id: 'privacy', label: 'Gizlilik & Güvenlik', icon: 'shield' },
+  { id: 'appearance', label: 'Görünüm', icon: 'palette' },
+  { id: 'about', label: 'Hakkında & Kısayollar', icon: 'info' },
+] as const;
 
-const SettingsPanel = ({
-  themeColor,
-  setThemeColor,
-  privacyLevel,
-  setPrivacyLevel,
-  tabLayout,
-  setTabLayout,
-  activeThemeId,
-  setActiveThemeId
-}: SettingsPanelProps) => {
-  const isLight = activeThemeId === 'light';
-  const [bgImage, setBgImage] = useState<string | null>(null);
-  const [customBgInput, setCustomBgInput] = useState('');
-  const [blockedCount, setBlockedCount] = useState(0);
+type SectionId = typeof SECTIONS[number]['id'];
 
-  const [privacyFeatures, setPrivacyFeatures] = useState<PrivacyFeatures>({
-    trackerBlocker: true,
-    httpsOnly: true,
-    fingerprintProtection: true,
-    cookieIsolation: false
-  });
+function isValidSection(s: string | undefined): s is SectionId {
+  return SECTIONS.some(sec => sec.id === s);
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 flex-shrink-0 ${
+        checked ? 'bg-primary' : 'bg-outline/40'
+      }`}
+    >
+      <span
+        className={`absolute top-1 w-4 h-4 rounded-full bg-background shadow transition-all duration-200 ${
+          checked ? 'left-6' : 'left-1'
+        }`}
+      />
+    </button>
+  );
+}
+
+function SettingRow({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6 py-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-on-surface">{label}</p>
+        {description && <p className="text-xs text-on-surface-variant mt-0.5">{description}</p>}
+      </div>
+      <div className="flex-shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <h2 className="text-xs font-semibold text-on-surface-variant uppercase tracking-[0.14em] mb-3 mt-7 first:mt-0">
+      {title}
+    </h2>
+  );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-surface-container-low rounded-xl border border-outline/10 px-4 divide-y divide-outline/10">
+      {children}
+    </div>
+  );
+}
+
+const THEMES: { id: ThemeId; label: string; icon: string }[] = [
+  { id: 'dark', label: 'Koyu', icon: 'dark_mode' },
+  { id: 'light', label: 'Açık', icon: 'light_mode' },
+  { id: 'oled', label: 'OLED', icon: 'contrast' },
+];
+
+const ACCENTS: { id: AccentId; label: string; hex: string }[] = [
+  { id: 'neutral', label: 'Nötr', hex: '#c6c6cf' },
+  { id: 'amber', label: 'Amber', hex: '#f59e0b' },
+  { id: 'indigo', label: 'İndigo', hex: '#818cf8' },
+  { id: 'emerald', label: 'Zümrüt', hex: '#34d399' },
+  { id: 'rose', label: 'Gül', hex: '#fb7185' },
+];
+
+const SHORTCUTS = [
+  { label: 'Yeni Sekme', keys: 'Ctrl+T' },
+  { label: 'Sekmeyi Kapat', keys: 'Ctrl+W' },
+  { label: 'Geri', keys: 'Alt+Sol' },
+  { label: 'İleri', keys: 'Alt+Sağ' },
+  { label: 'Yenile', keys: 'Ctrl+R' },
+  { label: 'Adres Çubuğu', keys: 'Ctrl+L' },
+  { label: 'Geçmiş', keys: 'Ctrl+H' },
+  { label: 'Kapalı Sekmeyi Aç', keys: 'Ctrl+Shift+T' },
+  { label: 'Sonraki Sekme', keys: 'Ctrl+Sekme' },
+  { label: 'Önceki Sekme', keys: 'Ctrl+Shift+Sekme' },
+];
+
+const SettingsPanel = ({ initialSection }: SettingsPanelProps) => {
+  const [activeSection, setActiveSection] = useState<SectionId>(
+    isValidSection(initialSection) ? initialSection : 'general'
+  );
 
   useEffect(() => {
-    // Sync individual features based on overall privacy level on mount or when level changes
-    setPrivacyFeatures({
-      trackerBlocker: privacyLevel !== 'off',
-      httpsOnly: privacyLevel === 'strict',
-      fingerprintProtection: privacyLevel === 'strict',
-      cookieIsolation: privacyLevel === 'strict'
-    });
-  }, [privacyLevel]);
+    if (isValidSection(initialSection)) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
-  const handleSave = () => {
+  // General
+  const [searchEngine, setSearchEngineState] = useState<SearchEngine>('duckduckgo');
+  const [restoreSession, setRestoreSession] = useState(false);
+  const [defaultZoom, setDefaultZoom] = useState(100);
+
+  // Privacy
+  const [trackerBlocking, setTrackerBlocking] = useState(true);
+  const [cookiePolicy, setCookiePolicyState] = useState<CookiePolicy>('all');
+  const [sitePermissions, setSitePermissions] = useState<Record<string, Record<string, 'allow' | 'block'>>>({});
+  const [historyCleared, setHistoryCleared] = useState(false);
+
+  // Appearance
+  const [theme, setThemeState] = useState<ThemeId>('dark');
+  const [accent, setAccentState] = useState<AccentId>('neutral');
+  const [reducedMotion, setReducedMotionState] = useState(false);
+
+  const loadSettings = useCallback(async () => {
+    setRestoreSession(localStorage.getItem('tekeli:restoreSession') === 'true');
+    const storedZoom = localStorage.getItem('tekeli:defaultZoom');
+    if (storedZoom) {
+      const z = Math.round(parseFloat(storedZoom) * 100);
+      if (z >= 80 && z <= 200) setDefaultZoom(z);
+    }
+    setThemeState((localStorage.getItem('tekeli:theme') || 'dark') as ThemeId);
+    setAccentState((localStorage.getItem('tekeli:accent') || 'neutral') as AccentId);
+    setReducedMotionState(localStorage.getItem('tekeli:reducedMotion') === 'true');
+
     try {
-      const prefs = {
-        theme: themeColor,
-        themeId: activeThemeId,
-        privacyLevel,
-        customBg: bgImage,
-        tabLayout,
-        privacyFeatures
-      };
-      localStorage.setItem('tekeli-preferences', JSON.stringify(prefs));
-      
-      // Still apply to window.electron where possible
-      if (window.electron?.setCookiePolicy) {
-        window.electron.setCookiePolicy(
-          privacyLevel === 'off' ? 'all' : 
-          privacyLevel === 'strict' ? 'block-all' : 'block-third-party'
-        );
-      }
-      if (window.electron?.setTrackerBlocking) {
-        window.electron.setTrackerBlocking(privacyLevel !== 'off');
+      const [searchRes, trackerRes, cookieRes, permsRes] = await Promise.all([
+        window.electron?.getSearchEngine?.(),
+        window.electron?.getTrackerBlocking?.(),
+        window.electron?.getCookiePolicy?.(),
+        window.electron?.getAllPermissions?.(),
+      ]);
+      if (searchRes?.engine) setSearchEngineState(searchRes.engine as SearchEngine);
+      if (trackerRes?.enabled !== undefined) setTrackerBlocking(trackerRes.enabled);
+      if (cookieRes?.policy) setCookiePolicyState(cookieRes.policy as CookiePolicy);
+      if (permsRes) setSitePermissions(permsRes);
+    } catch (err) {
+      console.error('[SettingsPanel] Load failed:', err);
+    }
+  }, []);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
+
+  const handleSearchEngineChange = async (engine: SearchEngine) => {
+    try {
+      await window.electron?.setSearchEngine?.(engine);
+      setSearchEngineState(engine);
+    } catch (err) {
+      console.error('[SettingsPanel] Search engine change failed:', err);
+    }
+  };
+
+  const handleTrackerToggle = async (enabled: boolean) => {
+    try {
+      await window.electron?.setTrackerBlocking?.(enabled);
+      setTrackerBlocking(enabled);
+    } catch (err) {
+      console.error('[SettingsPanel] Tracker toggle failed:', err);
+    }
+  };
+
+  const handleCookiePolicyChange = async (policy: CookiePolicy) => {
+    try {
+      await window.electron?.setCookiePolicy?.(policy);
+      setCookiePolicyState(policy);
+    } catch (err) {
+      console.error('[SettingsPanel] Cookie policy change failed:', err);
+    }
+  };
+
+  const handleClearPermissions = async (site?: string) => {
+    try {
+      await window.electron?.clearSitePermission?.(site);
+      if (site) {
+        setSitePermissions(prev => {
+          const next = { ...prev };
+          delete next[site];
+          return next;
+        });
+      } else {
+        setSitePermissions({});
       }
     } catch (err) {
-      console.error('Failed to save settings:', err);
+      console.error('[SettingsPanel] Clear permissions failed:', err);
     }
   };
 
-  useEffect(() => {
-    handleSave();
-  }, [themeColor, activeThemeId, privacyLevel, bgImage, tabLayout, privacyFeatures]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadSettings = () => {
-      try {
-        const saved = localStorage.getItem('tekeli-preferences');
-        if (mounted && saved) {
-          const prefs = JSON.parse(saved);
-          if (prefs.theme) setThemeColor(prefs.theme as ThemeColor);
-          if (prefs.themeId) setActiveThemeId(prefs.themeId as ThemeId);
-          if (prefs.privacyLevel) setPrivacyLevel(prefs.privacyLevel as PrivacyLevel);
-          if (prefs.customBg !== undefined) setBgImage(prefs.customBg);
-          if (prefs.tabLayout) setTabLayout(prefs.tabLayout as TabLayout);
-          if (prefs.privacyFeatures) setPrivacyFeatures(prefs.privacyFeatures);
-        }
-      } catch (err) {
-        console.error('Failed to load settings:', err);
-      }
-    };
-    loadSettings();
-
-    const fetchStats = async () => {
-      if (!window.electron?.getAdBlockStats) return;
-      try {
-        const stats = await window.electron.getAdBlockStats();
-        if (mounted && stats) setBlockedCount(stats.session);
-      } catch {}
-    };
-    fetchStats();
-    const interval = setInterval(fetchStats, 5000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [setThemeColor, setActiveThemeId, setPrivacyLevel, setTabLayout]);
-
-  // Auto-save when settings change
-  useEffect(() => {
-    const saveTimeout = setTimeout(() => {
-      handleSave();
-    }, 500); // Debounce saves
-
-    return () => {
-      clearTimeout(saveTimeout);
-    };
-  }, [themeColor, activeThemeId, privacyLevel, bgImage, tabLayout, privacyFeatures]);
-
-  const activeColor = colorClasses[themeColor] || colorClasses.indigo;
-  const toggleFeature = (feature: keyof PrivacyFeatures) => {
-    setPrivacyFeatures(prev => ({
-      ...prev,
-      [feature]: !prev[feature]
-    }));
-  };
-  const themes = getThemes(activeColor);
-
-  const handleApplyBg = () => {
-    if (customBgInput.trim()) {
-      setBgImage(customBgInput);
-      setCustomBgInput('');
-      handleSave();
+  const handleClearHistory = async () => {
+    try {
+      await window.electron?.clearHistory?.();
+      setHistoryCleared(true);
+      setTimeout(() => setHistoryCleared(false), 3000);
+    } catch (err) {
+      console.error('[SettingsPanel] Clear history failed:', err);
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const objectUrl = URL.createObjectURL(file);
-      setBgImage(objectUrl);
-      handleSave();
-    }
+  const handleThemeChange = (newTheme: ThemeId) => {
+    applyTheme(newTheme, accent);
+    setThemeState(newTheme);
   };
 
-  return (
-    <div className={`w-full h-full overflow-y-auto p-6 md:p-10 scrollbar-hide ${isLight ? 'bg-slate-50 text-slate-800' : 'bg-bg-primary text-white'}`}>
-      <div className="max-w-6xl mx-auto space-y-8 pb-20">
-        
-        {/* Header section */}
-        <div className="flex items-center gap-4 mb-10">
-          <div className="w-14 h-14 rounded-2xl bg-accent-blue/20 flex items-center justify-center text-accent-blue shadow-glass-glow">
-            <Layout size={28} />
+  const handleAccentChange = (newAccent: AccentId) => {
+    applyTheme(theme, newAccent);
+    setAccentState(newAccent);
+  };
+
+  const handleReducedMotionChange = (enabled: boolean) => {
+    localStorage.setItem('tekeli:reducedMotion', String(enabled));
+    if (enabled) {
+      document.documentElement.dataset.reducedMotion = 'true';
+    } else {
+      delete document.documentElement.dataset.reducedMotion;
+    }
+    setReducedMotionState(enabled);
+  };
+
+  const sites = Object.entries(sitePermissions);
+
+  const renderGeneral = () => (
+    <>
+      <SectionHeader title="Arama Motoru" />
+      <Card>
+        {(['duckduckgo', 'google'] as const).map(engine => (
+          <SettingRow
+            key={engine}
+            label={engine === 'duckduckgo' ? 'DuckDuckGo' : 'Google'}
+            description={engine === 'duckduckgo' ? 'Gizlilik odaklı' : 'En popüler arama motoru'}
+          >
+            <input
+              type="radio"
+              name="searchEngine"
+              checked={searchEngine === engine}
+              onChange={() => handleSearchEngineChange(engine)}
+              className="w-4 h-4 accent-current text-primary cursor-pointer"
+              aria-label={engine === 'duckduckgo' ? 'DuckDuckGo seç' : 'Google seç'}
+            />
+          </SettingRow>
+        ))}
+      </Card>
+
+      <SectionHeader title="Başlangıç" />
+      <Card>
+        <SettingRow
+          label="Önceki sekmeleri geri yükle"
+          description="Kapandığında açık sekmeleri hatırla"
+        >
+          <Toggle
+            checked={restoreSession}
+            onChange={(enabled) => {
+              localStorage.setItem('tekeli:restoreSession', String(enabled));
+              setRestoreSession(enabled);
+            }}
+          />
+        </SettingRow>
+      </Card>
+
+      <SectionHeader title="Görüntü" />
+      <Card>
+        <SettingRow
+          label="Varsayılan Zoom"
+          description={`Yeni sayfalar için başlangıç zoom seviyesi: %${defaultZoom}`}
+        >
+          <select
+            value={defaultZoom}
+            onChange={(e) => {
+              const z = Number(e.target.value);
+              localStorage.setItem('tekeli:defaultZoom', String(z / 100));
+              setDefaultZoom(z);
+            }}
+            className="bg-surface-container-high text-on-surface text-sm rounded-md px-2 py-1 border border-outline/20 cursor-pointer"
+            aria-label="Varsayılan zoom seviyesi"
+          >
+            {[80, 90, 100, 110, 125, 150].map(z => (
+              <option key={z} value={z}>%{z}</option>
+            ))}
+          </select>
+        </SettingRow>
+      </Card>
+    </>
+  );
+
+  const renderPrivacy = () => (
+    <>
+      <SectionHeader title="Gizlilik" />
+      <Card>
+        <SettingRow
+          label="İzleyici Engelleme"
+          description="Tracker ve reklam izleyicilerini engelle"
+        >
+          <Toggle checked={trackerBlocking} onChange={handleTrackerToggle} />
+        </SettingRow>
+      </Card>
+
+      <SectionHeader title="Çerez Politikası" />
+      <Card>
+        {([
+          { value: 'all' as CookiePolicy, label: 'Tüm çerezler', desc: 'Tüm çerezlere izin ver' },
+          { value: 'block-third-party' as CookiePolicy, label: '3. taraf çerezleri engelle', desc: 'Reklam izlemeyi engeller' },
+          { value: 'block-all' as CookiePolicy, label: 'Tüm çerezleri engelle', desc: 'En yüksek gizlilik' },
+        ]).map(({ value, label, desc }) => (
+          <SettingRow key={value} label={label} description={desc}>
+            <input
+              type="radio"
+              name="cookiePolicy"
+              checked={cookiePolicy === value}
+              onChange={() => handleCookiePolicyChange(value)}
+              className="w-4 h-4 accent-current text-primary cursor-pointer"
+              aria-label={label}
+            />
+          </SettingRow>
+        ))}
+      </Card>
+
+      <SectionHeader title="Site İzinleri" />
+      <Card>
+        {sites.length === 0 ? (
+          <div className="py-4 text-sm text-on-surface-variant text-center">Henüz site izni verilmedi</div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between py-3">
+              <span className="text-xs text-on-surface-variant">{sites.length} site kaydedilmiş</span>
+              <button
+                onClick={() => handleClearPermissions()}
+                className="text-xs text-error hover:text-error/80 transition-colors cursor-pointer"
+              >
+                Tümünü temizle
+              </button>
+            </div>
+            {sites.map(([site, perms]) => (
+              <div key={site} className="py-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-primary truncate max-w-[60%]">{site}</span>
+                  <button
+                    onClick={() => handleClearPermissions(site)}
+                    className="text-xs text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+                  >
+                    Kaldır
+                  </button>
+                </div>
+                {Object.entries(perms).map(([perm, decision]) => (
+                  <div key={perm} className="text-xs text-on-surface-variant flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${decision === 'allow' ? 'bg-primary' : 'bg-error'}`}
+                      aria-hidden="true"
+                    />
+                    {PERMISSION_LABELS[perm] || perm}: {decision === 'allow' ? 'İzin verildi' : 'Engellendi'}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+      </Card>
+
+      <SectionHeader title="Gezinti Geçmişi" />
+      <Card>
+        <div className="py-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-on-surface">Geçmişi temizle</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">Tüm ziyaret geçmişini sil</p>
+          </div>
+          <button
+            onClick={handleClearHistory}
+            className={`text-sm px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+              historyCleared
+                ? 'border-primary/30 text-primary bg-primary/10'
+                : 'border-error/40 text-error hover:bg-error/10'
+            }`}
+          >
+            {historyCleared ? 'Temizlendi' : 'Temizle'}
+          </button>
+        </div>
+      </Card>
+    </>
+  );
+
+  const renderAppearance = () => (
+    <>
+      <SectionHeader title="Tema" />
+      <div className="grid grid-cols-3 gap-3">
+        {THEMES.map(t => (
+          <button
+            key={t.id}
+            onClick={() => handleThemeChange(t.id)}
+            aria-pressed={theme === t.id}
+            className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all cursor-pointer ${
+              theme === t.id
+                ? 'border-primary/60 bg-primary-container/30'
+                : 'border-outline/15 bg-surface-container-low hover:bg-surface-container-high'
+            }`}
+          >
+            <span
+              className={`material-symbols-outlined text-[24px] ${theme === t.id ? 'text-primary' : 'text-secondary'}`}
+              aria-hidden="true"
+            >
+              {t.icon}
+            </span>
+            <span className={`text-xs font-medium ${theme === t.id ? 'text-primary' : 'text-secondary'}`}>
+              {t.label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <SectionHeader title="Vurgu Rengi" />
+      <div className="flex items-center gap-4 flex-wrap">
+        {ACCENTS.map(a => (
+          <button
+            key={a.id}
+            onClick={() => handleAccentChange(a.id)}
+            aria-pressed={accent === a.id}
+            aria-label={a.label}
+            className="flex flex-col items-center gap-1.5 cursor-pointer group"
+          >
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                accent === a.id
+                  ? 'ring-2 ring-offset-2 ring-offset-background ring-primary scale-110'
+                  : 'group-hover:scale-105'
+              }`}
+              style={{ backgroundColor: a.hex }}
+            >
+              {accent === a.id && (
+                <span className="material-symbols-outlined text-[16px] text-background" aria-hidden="true">
+                  check
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] text-on-surface-variant">{a.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <SectionHeader title="Erişilebilirlik" />
+      <Card>
+        <SettingRow
+          label="Hareketi azalt"
+          description="Animasyonları ve geçişleri kısalt"
+        >
+          <Toggle checked={reducedMotion} onChange={handleReducedMotionChange} />
+        </SettingRow>
+      </Card>
+    </>
+  );
+
+  const renderAbout = () => (
+    <>
+      <SectionHeader title="Uygulama" />
+      <Card>
+        <div className="py-4 flex items-start gap-4">
+          <div className="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl border border-outline/15 flex-shrink-0">
+            <img
+              src="/logo.svg"
+              alt="Tekeli logosu"
+              className="w-8 h-8 object-contain grayscale invert brightness-200"
+            />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Tarayıcını Şekillendir</h1>
-            <p className={`text-sm mt-1 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>Temanızı, gizlilik ayarlarınızı ve görünümü kişiselleştirin.</p>
+            <p className="text-sm font-bold text-on-surface">TekeliBrowser</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">Sürüm 3.0.1</p>
+            <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
+              Gelişmiş gizlilik ve performans odaklı masaüstü tarayıcı.
+            </p>
           </div>
         </div>
+      </Card>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          
-          {/* Left Column */}
-          <div className="space-y-8">
-            
-            {/* Theme Settings - Floating Island */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className={`p-6 rounded-3xl backdrop-blur-xl border shadow-glass ${isLight ? 'bg-white border-slate-200' : 'bg-bg-secondary/80 border-white/5'}`}
-            >
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-3">
-                <Palette size={20} className={isLight ? 'text-blue-500' : 'text-accent-blue'} /> Tema Seçimi
-              </h2>
-              
-              <div className="space-y-4">
-                {Object.values(themes).map(themeObj => (
-                  <label
-                    key={themeObj.id}
-                    className={`
-                      relative flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300
-                      ${activeThemeId === themeObj.id 
-                        ? (isLight ? 'bg-blue-50 border-2 border-blue-400' : 'bg-bg-elevated border-2 border-accent-blue shadow-[0_0_15px_rgba(0,240,255,0.15)]') 
-                        : (isLight ? 'bg-slate-50 border-2 border-transparent hover:bg-slate-100' : 'bg-black/20 border-2 border-transparent hover:bg-white/5')
-                      }
-                    `}
-                    onClick={() => setActiveThemeId(themeObj.id)}
-                  >
-                    <div className="flex-1">
-                      <div className={`font-semibold ${activeThemeId === themeObj.id ? (isLight ? 'text-blue-700' : 'text-accent-blue') : ''}`}>
-                        {themeObj.name}
-                      </div>
-                      <div className={`text-sm mt-1 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>
-                        {themeObj.desc}
-                      </div>
-                    </div>
-                    
-                    <div className={`
-                      w-6 h-6 rounded-full border-2 flex flex-shrink-0 items-center justify-center transition-colors
-                      ${activeThemeId === themeObj.id 
-                        ? (isLight ? 'border-blue-500 bg-blue-500' : 'border-accent-blue bg-accent-blue') 
-                        : (isLight ? 'border-slate-300' : 'border-gray-600')
-                      }
-                    `}>
-                      {activeThemeId === themeObj.id && <div className="w-2 h-2 rounded-full bg-white" />}
-                    </div>
-
-                    {/* Color picker for Neon theme */}
-                    <AnimatePresence>
-                      {themeObj.id !== 'zen' && activeThemeId === themeObj.id && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="absolute -bottom-16 left-0 right-0 p-3 rounded-xl flex gap-3 flex-wrap z-10"
-                        >
-                          <div className={`p-2 rounded-xl flex gap-2 w-full ${isLight ? 'bg-white shadow-lg border border-slate-200' : 'bg-bg-secondary border border-white/10 shadow-glass-glow'}`}>
-                            {(Object.keys(colorClasses) as ThemeColor[]).map(colorKey => (
-                              <button
-                                key={colorKey}
-                                className={`w-8 h-8 rounded-full transition-transform ${
-                                  themeColor === colorKey ? 'scale-110 ring-2 ring-offset-2 ' + (isLight ? 'ring-offset-white ring-blue-400' : 'ring-offset-bg-secondary ring-accent-blue') : 'hover:scale-105'
-                                }`}
-                                style={{ background: `var(--${colorKey}-gradient, ${colorKey === 'indigo' ? '#6366f1' : colorKey === 'rose' ? '#f43f5e' : colorKey === 'emerald' ? '#10b981' : colorKey === 'orange' ? '#f97316' : colorKey === 'cyan' ? '#06b6d4' : '#8b5cf6'})` }}
-                                onClick={(e) => { e.preventDefault(); setThemeColor(colorKey); }}
-                                title={colorKey}
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </label>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Layout Settings - Floating Island */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={`p-6 rounded-3xl backdrop-blur-xl border shadow-glass ${isLight ? 'bg-white border-slate-200' : 'bg-bg-secondary/80 border-white/5'} ${activeThemeId !== 'zen' ? 'mt-20' : ''}`}
-            >
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-3">
-                <Layout size={20} className={isLight ? 'text-blue-500' : 'text-accent-blue'} /> Sekme Düzeni
-              </h2>
-              
-              <div className={`flex p-1.5 rounded-xl ${isLight ? 'bg-slate-100' : 'bg-black/40 border border-white/5'}`}>
-                <button
-                  className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all ${
-                    tabLayout === 'horizontal' 
-                      ? (isLight 
-                          ? 'bg-white text-blue-600 shadow-sm' 
-                          : 'bg-bg-elevated text-accent-blue shadow-glass-active') 
-                      : (isLight 
-                          ? 'text-slate-500 hover:text-slate-700' 
-                          : 'text-gray-400 hover:text-white')
-                  }`}
-                  onClick={() => setTabLayout('horizontal')}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-3 border-t-2 border-current rounded-sm opacity-70" /> Yatay
-                  </div>
-                </button>
-                <button
-                  className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all ${
-                    tabLayout === 'vertical' 
-                      ? (isLight 
-                          ? 'bg-white text-blue-600 shadow-sm' 
-                          : 'bg-bg-elevated text-accent-blue shadow-glass-active') 
-                      : (isLight 
-                          ? 'text-slate-500 hover:text-slate-700' 
-                          : 'text-gray-400 hover:text-white')
-                  }`}
-                  onClick={() => setTabLayout('vertical')}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-3 h-4 border-l-2 border-current rounded-sm opacity-70" /> Dikey
-                  </div>
-                </button>
-              </div>
-            </motion.div>
+      <SectionHeader title="Klavye Kısayolları" />
+      <Card>
+        {SHORTCUTS.map((s, i) => (
+          <div key={i} className="flex items-center justify-between py-2.5">
+            <span className="text-sm text-on-surface-variant">{s.label}</span>
+            <kbd className="text-xs font-mono text-primary bg-surface-container-high px-2 py-0.5 rounded-md border border-outline/15">
+              {s.keys}
+            </kbd>
           </div>
+        ))}
+      </Card>
+    </>
+  );
 
-          {/* Right Column */}
-          <div className="space-y-8">
-            
-            {/* Privacy Settings - Floating Island */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className={`p-6 rounded-3xl backdrop-blur-xl border shadow-glass ${isLight ? 'bg-white border-slate-200' : 'bg-bg-secondary/80 border-white/5'}`}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold flex items-center gap-3">
-                  <ShieldCheck size={20} className={isLight ? 'text-green-500' : 'text-accent-green'} /> Gizlilik
-                </h2>
-                
-                {/* Blocked Counter Mini-badge */}
-                <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 ${isLight ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-accent-green/10 text-accent-green border border-accent-green/20'}`}>
-                  <ShieldCheck size={14} />
-                  {blockedCount.toLocaleString('en-US')} Engellendi
-                </div>
-              </div>
-
-              {/* Preset Levels */}
-              <div className="grid grid-cols-3 gap-3 mb-6">
-                {(['off', 'standard', 'strict'] as PrivacyLevel[]).map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setPrivacyLevel(level)}
-                    className={`
-                      py-3 px-2 text-xs font-medium rounded-xl border transition-all text-center
-                      ${privacyLevel === level 
-                        ? (isLight 
-                            ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-sm' 
-                            : 'bg-accent-blue/10 border-accent-blue text-accent-blue shadow-[0_0_10px_rgba(0,240,255,0.2)]')
-                        : (isLight 
-                            ? 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100' 
-                            : 'bg-black/20 border-white/5 text-gray-400 hover:bg-white/5')
-                      }
-                    `}
-                  >
-                    {level === 'off' ? 'Kapalı' : level === 'standard' ? 'Dengeli' : 'Katı'}
-                  </button>
-                ))}
-              </div>
-
-              {/* 4 Individual Feature Toggles */}
-              <div className="space-y-3">
-                <div className={`text-xs font-bold uppercase tracking-wider mb-3 ${isLight ? 'text-slate-400' : 'text-gray-500'}`}>Aktif Modüller</div>
-
-                {/* Tracker Blocker */}
-                <FeatureToggle 
-                  icon={Activity} 
-                  title="İzleyici Engelleyici" 
-                  desc={privacyFeatures.trackerBlocker ? 'Tüm izleyiciler ve reklamlar engelleniyor' : 'Devre Dışı'}
-                  isActive={privacyFeatures.trackerBlocker}
-                  onClick={() => toggleFeature('trackerBlocker')}
-                  isLight={isLight}
-                />
-
-                {/* HTTPS-Only */}
-                <FeatureToggle 
-                  icon={Lock} 
-                  title="HTTPS-Only Modu" 
-                  desc={privacyFeatures.httpsOnly ? 'Bağlantılar zorla şifreleniyor' : 'Bağlantılar şifresiz olabilir'}
-                  isActive={privacyFeatures.httpsOnly}
-                  onClick={() => toggleFeature('httpsOnly')}
-                  isLight={isLight}
-                />
-
-                {/* Fingerprint Protection */}
-                <FeatureToggle 
-                  icon={Fingerprint} 
-                  title="Parmak İzi Koruması" 
-                  desc={privacyFeatures.fingerprintProtection ? 'Donanım verisi maskeleniyor' : 'Devre Dışı'}
-                  isActive={privacyFeatures.fingerprintProtection}
-                  onClick={() => toggleFeature('fingerprintProtection')}
-                  isLight={isLight}
-                />
-
-                {/* Cookie Isolation */}
-                <FeatureToggle 
-                  icon={EyeOff} 
-                  title="Çerez İzolasyonu" 
-                  desc={privacyFeatures.cookieIsolation ? 'Siteler arası tam izolasyon' : 'Tüm çerezlere izin veriliyor'}
-                  isActive={privacyFeatures.cookieIsolation}
-                  onClick={() => toggleFeature('cookieIsolation')}
-                  isLight={isLight}
-                />
-              </div>
-            </motion.div>
-
-            {/* Background Settings - Floating Island */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className={`p-6 rounded-3xl backdrop-blur-xl border shadow-glass ${isLight ? 'bg-white border-slate-200' : 'bg-bg-secondary/80 border-white/5'}`}
-            >
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-3">
-                <ImageIcon size={20} className={isLight ? 'text-blue-500' : 'text-accent-blue'} /> Arka Plan
-              </h2>
-              
-              <div className="space-y-5">
-                <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>Yeni sekme sayfası için özel bir arka plan resmi belirleyin.</p>
-
-                {/* URL Input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Resim URL'si (https://...)"
-                    value={customBgInput}
-                    onChange={e => setCustomBgInput(e.target.value)}
-                    className={`flex-1 px-4 py-3 rounded-xl border outline-none text-sm transition-all focus:ring-2 ${
-                      isLight 
-                        ? 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:border-blue-400 focus:ring-blue-100' 
-                        : 'bg-black/20 border-white/10 text-white placeholder-gray-500 focus:border-accent-blue focus:ring-accent-blue/20'
-                    }`}
-                  />
-                  <button 
-                    onClick={handleApplyBg} 
-                    className={`px-5 py-3 rounded-xl font-medium transition-all ${
-                      isLight 
-                        ? 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200' 
-                        : 'bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue border border-accent-blue/30'
-                    }`}
-                  >
-                    Uygula
-                  </button>
-                </div>
-
-                {/* File Upload */}
-                <div className={`relative overflow-hidden rounded-xl border-2 border-dashed transition-colors ${
-                  isLight ? 'border-slate-300 hover:border-blue-400 bg-slate-50' : 'border-white/20 hover:border-accent-blue/50 bg-black/20'
-                }`}>
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg, image/jpg, image/webp"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    title="Dosya seç"
-                  />
-                  <div className="p-6 flex flex-col items-center justify-center gap-3 text-center">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isLight ? 'bg-blue-100 text-blue-500' : 'bg-white/5 text-gray-400'}`}>
-                      <ImageIcon size={24} />
-                    </div>
-                    <div>
-                      <p className={`font-medium ${isLight ? 'text-slate-700' : 'text-gray-300'}`}>Bilgisayardan Yükle</p>
-                      <p className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>Sürükleyip bırakın veya tıklayın (PNG, JPG, WEBP)</p>
-                    </div>
-                  </div>
-                </div>
-
-                {bgImage && (
-                  <div className="pt-2 flex justify-between items-center">
-                    <span className={`text-sm ${isLight ? 'text-green-600' : 'text-accent-green'}`}>✓ Özel arka plan aktif</span>
-                    <button
-                      onClick={() => { setBgImage(null); handleSave(); }}
-                      className={`text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-colors ${
-                        isLight ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                      }`}
-                    >
-                      <Trash2 size={12} /> Kaldır
-                    </button>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
+  return (
+    <div className="w-full h-full flex bg-background text-on-surface overflow-hidden">
+      <nav
+        className="w-48 h-full flex-shrink-0 border-r border-outline/10 bg-surface-container-low flex flex-col pt-6"
+        aria-label="Ayarlar bölümleri"
+      >
+        <div className="px-4 mb-5">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-on-surface-variant font-medium">Ayarlar</p>
         </div>
-      </div>
+        <ul className="flex flex-col gap-0.5 px-3" role="list">
+          {SECTIONS.map(s => (
+            <li key={s.id}>
+              <button
+                onClick={() => setActiveSection(s.id)}
+                aria-current={activeSection === s.id ? 'page' : undefined}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                  activeSection === s.id
+                    ? 'bg-primary-container/40 text-on-primary-container font-medium'
+                    : 'text-secondary hover:text-primary hover:bg-surface-container-high'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
+                  {s.icon}
+                </span>
+                <span>{s.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <main className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="max-w-xl">
+          <h1 className="text-base font-bold text-on-surface tracking-tight mb-6">
+            {SECTIONS.find(s => s.id === activeSection)?.label}
+          </h1>
+          {activeSection === 'general' && renderGeneral()}
+          {activeSection === 'privacy' && renderPrivacy()}
+          {activeSection === 'appearance' && renderAppearance()}
+          {activeSection === 'about' && renderAbout()}
+        </div>
+      </main>
     </div>
   );
 };
-
-// Extracted Toggle Component for cleaner code
-const FeatureToggle = ({ 
-  icon: Icon, 
-  title, 
-  desc, 
-  isActive, 
-  onClick, 
-  isLight 
-}: { 
-  icon: any, 
-  title: string, 
-  desc: string, 
-  isActive: boolean, 
-  onClick: () => void,
-  isLight: boolean
-}) => (
-  <div className={`p-4 rounded-2xl border transition-colors flex items-center justify-between ${
-    isLight 
-      ? 'bg-slate-50 border-slate-200 hover:border-slate-300' 
-      : 'bg-black/20 border-white/5 hover:border-white/10'
-  }`}>
-    <div className="flex items-start gap-4">
-      <div className={`mt-0.5 p-2 rounded-lg ${
-        isActive 
-          ? (isLight ? 'bg-green-100 text-green-600' : 'bg-accent-green/20 text-accent-green') 
-          : (isLight ? 'bg-slate-200 text-slate-400' : 'bg-white/5 text-gray-500')
-      }`}>
-        <Icon size={18} />
-      </div>
-      <div>
-        <div className={`text-sm font-semibold ${isLight ? 'text-slate-800' : 'text-white'}`}>{title}</div>
-        <div className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-gray-400'}`}>{desc}</div>
-      </div>
-    </div>
-    <button
-      onClick={onClick}
-      className={`relative w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${
-        isActive 
-          ? (isLight ? 'bg-green-500' : 'bg-accent-green shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]') 
-          : (isLight ? 'bg-slate-300' : 'bg-white/20')
-      }`}
-    >
-      <motion.div
-        layout
-        className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md`}
-        initial={false}
-        animate={{ 
-          left: isActive ? '1.75rem' : '0.25rem',
-        }}
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      />
-    </button>
-  </div>
-);
 
 export default SettingsPanel;

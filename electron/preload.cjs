@@ -57,6 +57,19 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Omnibox
   getOmniboxSuggestions: (search, limit) => ipcRenderer.invoke('get-omnibox-suggestions', search, limit),
+  addSearchQuery: (query) => ipcRenderer.invoke('add-search-query', query),
+  getSearchHistory: (search, limit) => ipcRenderer.invoke('get-search-history', search, limit),
+
+  // Auth
+  authRegister: (payload) => ipcRenderer.invoke('auth-register', payload),
+  authLogin: (payload) => ipcRenderer.invoke('auth-login', payload),
+  authLogout: () => ipcRenderer.invoke('auth-logout'),
+  authGetCurrentUser: () => ipcRenderer.invoke('auth-get-current-user'),
+  authUpdateProfile: (payload) => ipcRenderer.invoke('auth-update-profile', payload),
+  
+  // Spaces
+  getSpacesState: () => ipcRenderer.invoke('getSpacesState'),
+  setSpacesState: (state) => ipcRenderer.invoke('setSpacesState', state),
   
   // Permission request from main process
   onPermissionRequest: (callback) => {

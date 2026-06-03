@@ -66,18 +66,20 @@ const PermissionPrompt = () => {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.2 }}
-          className="absolute left-1/2 -translate-x-1/2 top-14 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-dark-surface/95 backdrop-blur-md border border-neon-blue/20 shadow-xl"
+          role="dialog"
+          aria-live="polite"
+          className="absolute left-1/2 -translate-x-1/2 top-14 z-prompt flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-high/95 backdrop-blur-md border border-outline/15 shadow-elev-3"
         >
-          <span className="text-sm text-white/90">
-            <strong className="text-neon-blue">{pending.site}</strong> {label} kullanmak istiyor
+          <span className="text-sm text-on-surface">
+            <strong className="text-primary">{pending.site}</strong> {label} kullanmak istiyor
           </span>
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-secondary cursor-pointer">
               <input
                 type="checkbox"
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
-                className="rounded border-white/30 bg-dark-bg text-neon-blue focus:ring-neon-blue/50"
+                className="rounded-sm border-outline/40 bg-surface-container-lowest accent-primary"
               />
               Bu site için hatırla
             </label>
@@ -85,7 +87,7 @@ const PermissionPrompt = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleAllow}
-              className="px-3 py-1.5 rounded-lg bg-neon-blue/20 hover:bg-neon-blue/30 text-neon-blue text-sm font-medium transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-sm font-medium transition-colors"
             >
               İzin Ver
             </motion.button>
@@ -93,7 +95,7 @@ const PermissionPrompt = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleBlock}
-              className="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-medium transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-error/20 hover:bg-error/30 text-error text-sm font-medium transition-colors"
             >
               Engelle
             </motion.button>

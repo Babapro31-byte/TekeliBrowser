@@ -1,4 +1,4 @@
-export interface AdBlockStats {
+  export interface AdBlockStats {
   total: number;
   session: number;
 }
@@ -99,6 +99,37 @@ export interface OmniboxSuggestion {
   title: string;
 }
 
+export interface SearchHistoryEntry {
+  query: string;
+  lastUsed: number;
+  useCount: number;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  lastLoginAt?: number;
+}
+
+export interface SpacesState {
+  collapsed: boolean;
+}
+
+export interface SpacesResponse {
+  success: boolean;
+  state?: SpacesState | null;
+  error?: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  user?: AuthUser | null;
+  error?: string;
+}
+
 export interface IElectronAPI {
   // Window controls
   minimizeWindow: () => void;
@@ -132,6 +163,19 @@ export interface IElectronAPI {
 
   // Omnibox
   getOmniboxSuggestions: (search: string, limit?: number) => Promise<OmniboxSuggestion[]>;
+  addSearchQuery: (query: string) => Promise<{ success: boolean }>;
+  getSearchHistory: (search?: string, limit?: number) => Promise<SearchHistoryEntry[]>;
+
+  // Auth
+  authRegister: (payload: { email: string; password: string; name?: string }) => Promise<AuthResponse>;
+  authLogin: (payload: { email: string; password: string }) => Promise<AuthResponse>;
+  authLogout: () => Promise<{ success: boolean }>;
+  authGetCurrentUser: () => Promise<AuthResponse>;
+  authUpdateProfile: (payload: { name: string }) => Promise<AuthResponse>;
+  
+  // Spaces
+  getSpacesState: () => Promise<SpacesResponse>;
+  setSpacesState: (state: SpacesState) => Promise<SpacesResponse>;
   
   // Permission prompts
   onPermissionRequest: (callback: (data: { requestId: string; site: string; permission: string; requestingUrl?: string }) => void) => () => void;
