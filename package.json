@@ -1,6 +1,6 @@
 {
   "name": "tekeli-browser",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "Ultra-modern desktop browser with Glassmorphism and Neon design",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -52,8 +52,8 @@
   "build": {
     "appId": "com.tekeli.browser",
     "productName": "TekeliBrowser",
-    "buildVersion": "3.0.0",
-    "icon": "public/logo.svg",
+    "buildVersion": "3.1.0",
+    "icon": "public/logo.png",
     "directories": {
       "output": "release"
     },
