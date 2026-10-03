@@ -40,6 +40,14 @@ jobs:
           npm run typecheck
           npm test
 
+      # electron-builder uploads files in parallel and each upload may create its own release when none
+      # exists yet (two releases for one tag, assets split between them). Create the draft once, first.
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --generate-notes
+
       - name: Build and upload (draft)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
