@@ -5,6 +5,7 @@ import { log } from './logger';
 const trustedWebContents = new Set<number>();
 const trustedOrigins = new Set<string>(['tekeli://app']);
 const registered = new Set<string>();
+const INTERNAL_PROTOCOL = 'tekeli:';
 
 export function trustWebContents(id: number): void {
   trustedWebContents.add(id);
@@ -20,7 +21,7 @@ export function addTrustedOrigin(origin: string): void {
 
 export type SenderLike = {
   sender: { id: number };
-  senderFrame?: { url: string } | null;
+  senderFrame?: { url: string; parent?: unknown } | null;
 };
 
 /** `URL.origin` is the string "null" for non-special schemes such as tekeli://, so build it by hand. */
@@ -41,17 +42,23 @@ export function originOf(url: string): string | null {
  * (tekeli://app internal pages). Substring checks are never used.
  */
 export function isTrustedSender(event: SenderLike, devOrigin = process.env.VITE_DEV_SERVER_URL): boolean {
-  const url = event.senderFrame?.url;
+  const frame = event.senderFrame;
+  const url = frame?.url;
   if (!url) return trustedWebContents.has(event.sender.id);
+
+  // Only top-level frames may call privileged IPC; an iframe inside an app page never can.
+  if (frame?.parent) return false;
 
   const origin = originOf(url);
   const isAppOrigin =
     (origin !== null && trustedOrigins.has(origin)) ||
     (devOrigin !== undefined && origin !== null && origin === originOf(devOrigin)) ||
-    url.startsWith('file://');
+    url.startsWith('file://') ||
+    url.startsWith(`${INTERNAL_PROTOCOL}//`);
 
   if (trustedWebContents.has(event.sender.id)) return isAppOrigin;
-  return origin !== null && trustedOrigins.has(origin);
+  // Internal pages (tekeli://settings …) run in tab webContents we do not register individually.
+  return url.startsWith(`${INTERNAL_PROTOCOL}//`) || (origin !== null && trustedOrigins.has(origin));
 }
 
 function claim(channel: string): void {

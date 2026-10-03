@@ -1,0 +1,105 @@
+/* Generated from design-system/TOKENS.md. Channels are space-separated RGB so Tailwind can apply alpha. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --c-app: 15 15 18;
+  --c-chrome: 22 22 26;
+  --c-toolbar: 30 30 35;
+  --c-surface: 30 30 35;
+  --c-raised: 38 38 44;
+  --c-hover: 44 44 51;
+  --c-pressed: 52 52 60;
+  --c-field: 19 19 23;
+  --c-fg: 244 244 245;
+  --c-fg-2: 182 182 192;
+  --c-fg-3: 140 140 152;
+  --c-on-accent: 15 15 18;
+  --c-link: 165 180 252;
+  --c-line-subtle: 42 42 49;
+  --c-line: 58 58 67;
+  --c-line-strong: 85 85 95;
+  --c-accent: 129 140 248;
+  --c-accent-hover: 165 180 252;
+  --c-accent-subtle: 37 38 77;
+  --c-ok: 74 222 128;
+  --c-ok-subtle: 18 48 30;
+  --c-warn: 251 191 36;
+  --c-warn-subtle: 58 45 12;
+  --c-danger: 248 113 113;
+  --c-danger-subtle: 61 24 24;
+  --c-ring: 165 180 252;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --c-app: 244 244 246;
+  --c-chrome: 230 230 235;
+  --c-toolbar: 255 255 255;
+  --c-surface: 255 255 255;
+  --c-raised: 255 255 255;
+  --c-hover: 237 237 241;
+  --c-pressed: 225 225 231;
+  --c-field: 241 241 244;
+  --c-fg: 24 24 27;
+  --c-fg-2: 82 82 91;
+  --c-fg-3: 107 107 118;
+  --c-on-accent: 255 255 255;
+  --c-link: 67 56 202;
+  --c-line-subtle: 228 228 233;
+  --c-line: 208 208 216;
+  --c-line-strong: 168 168 179;
+  --c-accent: 79 70 229;
+  --c-accent-hover: 67 56 202;
+  --c-accent-subtle: 230 231 253;
+  --c-ok: 21 128 61;
+  --c-ok-subtle: 220 252 231;
+  --c-warn: 180 83 9;
+  --c-warn-subtle: 254 243 199;
+  --c-danger: 220 38 38;
+  --c-danger-subtle: 254 226 226;
+  --c-ring: 79 70 229;
+}
+
+[data-theme="oled"] {
+  color-scheme: dark;
+  --c-app: 0 0 0;
+  --c-chrome: 7 7 8;
+  --c-toolbar: 14 14 16;
+  --c-surface: 14 14 16;
+  --c-raised: 22 22 25;
+  --c-hover: 28 28 32;
+  --c-pressed: 37 37 42;
+  --c-field: 5 5 6;
+  --c-fg: 244 244 245;
+  --c-fg-2: 178 178 186;
+  --c-fg-3: 140 140 152;
+  --c-on-accent: 0 0 0;
+  --c-link: 165 180 252;
+  --c-line-subtle: 31 31 36;
+  --c-line: 46 46 53;
+  --c-line-strong: 74 74 84;
+  --c-accent: 129 140 248;
+  --c-accent-hover: 165 180 252;
+  --c-accent-subtle: 23 24 58;
+  --c-ok: 74 222 128;
+  --c-ok-subtle: 11 36 21;
+  --c-warn: 251 191 36;
+  --c-warn-subtle: 42 32 8;
+  --c-danger: 248 113 113;
+  --c-danger-subtle: 44 16 16;
+  --c-ring: 165 180 252;
+}
+
+[data-theme="dark"][data-accent="emerald"] { --c-accent: 52 211 153; --c-accent-hover: 110 231 183; --c-accent-subtle: 15 46 36; --c-ring: 110 231 183; }
+[data-theme="oled"][data-accent="emerald"] { --c-accent: 52 211 153; --c-accent-hover: 110 231 183; --c-accent-subtle: 15 46 36; --c-ring: 110 231 183; }
+[data-theme="light"][data-accent="emerald"] { --c-accent: 4 120 87; --c-accent-hover: 6 95 70; --c-accent-subtle: 209 250 229; --c-ring: 4 120 87; }
+[data-theme="dark"][data-accent="amber"] { --c-accent: 251 191 36; --c-accent-hover: 252 211 77; --c-accent-subtle: 51 39 10; --c-ring: 252 211 77; }
+[data-theme="oled"][data-accent="amber"] { --c-accent: 251 191 36; --c-accent-hover: 252 211 77; --c-accent-subtle: 51 39 10; --c-ring: 252 211 77; }
+[data-theme="light"][data-accent="amber"] { --c-accent: 180 83 9; --c-accent-hover: 146 64 14; --c-accent-subtle: 254 243 199; --c-ring: 180 83 9; }
+[data-theme="dark"][data-accent="rose"] { --c-accent: 251 113 133; --c-accent-hover: 253 164 175; --c-accent-subtle: 58 22 32; --c-ring: 253 164 175; }
+[data-theme="oled"][data-accent="rose"] { --c-accent: 251 113 133; --c-accent-hover: 253 164 175; --c-accent-subtle: 58 22 32; --c-ring: 253 164 175; }
+[data-theme="light"][data-accent="rose"] { --c-accent: 190 18 60; --c-accent-hover: 159 18 57; --c-accent-subtle: 255 228 230; --c-ring: 190 18 60; }
+[data-theme="dark"][data-accent="neutral"] { --c-accent: 212 212 216; --c-accent-hover: 244 244 245; --c-accent-subtle: 42 42 47; --c-ring: 244 244 245; }
+[data-theme="oled"][data-accent="neutral"] { --c-accent: 212 212 216; --c-accent-hover: 244 244 245; --c-accent-subtle: 42 42 47; --c-ring: 244 244 245; }
+[data-theme="light"][data-accent="neutral"] { --c-accent: 63 63 70; --c-accent-hover: 39 39 42; --c-accent-subtle: 228 228 231; --c-ring: 63 63 70; }
+:root:not([data-theme])[data-accent="emerald"] { --c-accent: 52 211 153; --c-accent-hover: 110 231 183; --c-accent-subtle: 15 46 36; }
