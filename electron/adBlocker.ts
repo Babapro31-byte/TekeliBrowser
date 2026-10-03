@@ -3,8 +3,7 @@
  * Enhanced with YouTube-specific blocking and FilterManager integration
  */
 
-import { session } from 'electron';
-import { filterManager, FilterConfig } from './filterManager.js';
+import { filterManager } from './filterManager.js';
 
 // Ad blocking statistics
 let totalBlocked = 0;

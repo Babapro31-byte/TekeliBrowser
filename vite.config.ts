@@ -27,14 +27,6 @@ function copyPreloadFiles(): Plugin {
       const webviewPreloadDest = path.resolve(destDir, 'webviewPreload.cjs');
       fs.copyFileSync(webviewPreloadSrc, webviewPreloadDest);
       console.log('Copied webviewPreload.cjs to dist-electron/');
-
-      // Copy sql.js WASM (needed in packaged app)
-      const sqlWasmSrc = path.resolve(__dirname, 'node_modules/sql.js/dist/sql-wasm.wasm');
-      const sqlWasmDest = path.resolve(destDir, 'sql-wasm.wasm');
-      if (fs.existsSync(sqlWasmSrc)) {
-        fs.copyFileSync(sqlWasmSrc, sqlWasmDest);
-        console.log('Copied sql-wasm.wasm to dist-electron/');
-      }
     }
   };
 }
@@ -64,21 +56,6 @@ export default defineConfig({
               }
             },
             plugins: [copyPreloadFiles()]
-          }
-        },
-        {
-          entry: 'electron/adBlocker.ts',
-          vite: {
-            build: {
-              outDir: 'dist-electron',
-              rollupOptions: {
-                external: ['electron', 'electron/main'],
-                output: {
-                  format: 'cjs',
-                  entryFileNames: '[name].cjs'
-                }
-              }
-            }
           }
         }
       ]),

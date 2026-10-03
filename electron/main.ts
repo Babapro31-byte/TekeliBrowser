@@ -1,26 +1,22 @@
 import { app, BrowserWindow, ipcMain, session, Menu, clipboard } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ElectronBlocker } from '@ghostery/adblocker-electron';
-import fetch from 'cross-fetch';
-import { initAdBlocker, setPrivacyUserAgent, getBlockStats, forceUpdateFilters, getFilterManager, setTrackerBlocking, isTrackerBlockingEnabled } from './adBlocker.js';
-import { generateYouTubeAdBlockerScript } from './youtubeAdBlocker.js';
+import { initAdBlocker, getBlockStats, forceUpdateFilters, getFilterManager, setTrackerBlocking, isTrackerBlockingEnabled } from './adBlocker.js';
 import { initAutoUpdater, checkForUpdatesOnStartup, getCurrentVersion } from './autoUpdater.js';
-import { initDatabase, flushDatabase } from './db.js';
+import { initDatabase, closeDatabase } from './db.js';
 import { initSessionManager } from './sessionManager.js';
 import { initHistoryManager } from './historyManager.js';
 import { initBookmarksManager } from './bookmarksManager.js';
 import { initOmniboxManager } from './omniboxManager.js';
 import { initAuthManager } from './authManager.js';
-import { initSpacesManager } from './spacesManager.js';
-import { initIncognitoManager, createIncognitoPartition, clearIncognitoSession } from './incognitoManager.js';
+import { initIncognitoManager } from './incognitoManager.js';
 import { getSiteFromUrl, getPermission, setPermission, getAllPermissions, clearPermission } from './permissionManager.js';
-import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting, getSearchEngine, setSearchEngine, getDoHProvider, setDoHProvider, getHttpsOnly, setHttpsOnly, getFingerprintDefender, setFingerprintDefender } from './settingsManager.js';
+import { getCookiePolicy, setCookiePolicy, getTrackerBlocking, setTrackerBlockingSetting, getSearchEngine, setSearchEngine } from './settingsManager.js';
 import { isValidSender } from './ipcValidation.js';
-import { initializeAdvancedFeatures } from './advancedFeatures.js';
+import { installConsoleLogging, flushLogsSync } from './core/logger';
+import { trustWebContents } from './core/ipc';
 
 let mainWindow: BrowserWindow | null = null;
-let ghosteryBlocker: ElectronBlocker | null = null;
 let ghosteryBlockedCount = 0;
 
 const pendingPermissionRequests = new Map<
@@ -47,20 +43,7 @@ const downloadRecords = new Map<string, DownloadRecord>();
 const pendingDownloadIdsByUrl = new Map<string, string[]>();
 const lastDownloadEmit = new Map<string, { at: number; bytes: number; state: DownloadState }>();
 
-function appendLog(...args: any[]): void {
-  try {
-    const line = `[${new Date().toISOString()}] ${args.map(a => {
-      try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); }
-    }).join(' ')}
-`;
-    fs.appendFileSync(path.join(app.getPath('userData'), 'tekeli.log'), line, 'utf-8');
-  } catch {}
-}
-
-const _log = console.log.bind(console);
-const _error = console.error.bind(console);
-console.log = (...args: any[]) => { _log(...args); appendLog(...args); };
-console.error = (...args: any[]) => { _error(...args); appendLog(...args); };
+installConsoleLogging();
 
 function getUniqueSavePath(initialPath: string): string {
   const dir = path.dirname(initialPath);
@@ -78,29 +61,6 @@ function getUniqueSavePath(initialPath: string): string {
 function emitDownloadUpdated(record: DownloadRecord): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('download-updated', record);
-}
-
-async function initGhosteryAdBlocker(): Promise<void> {
-  if (ghosteryBlocker) return;
-
-  const blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
-  const originalOnBeforeRequest = blocker.onBeforeRequest.bind(blocker);
-  blocker.onBeforeRequest = (details, callback) => {
-    originalOnBeforeRequest(details, (response) => {
-      if (response.cancel) {
-        ghosteryBlockedCount += 1;
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('tracker-blocked', { count: ghosteryBlockedCount });
-        }
-      }
-      callback(response);
-    });
-  };
-
-  ghosteryBlocker = blocker;
-  blocker.enableBlockingInSession(session.defaultSession);
-  blocker.enableBlockingInSession(session.fromPartition('persist:webview', { cache: true }));
-  console.log('[TekeliBrowser] Ghostery adblocker enabled');
 }
 
 function setupDownloads(): void {
@@ -262,55 +222,22 @@ function applyHttpsOnlyMode(ses: Electron.Session): void {
   console.log('[TekeliBrowser] HTTPS-Only mode enforced via redirect');
 }
 
-/** Apply DoH provider */
-function applyDoH(ses: Electron.Session, provider: string): void {
+/** Apply DNS-over-HTTPS (process-wide host resolver). */
+function applyDoH(provider: 'cloudflare' | 'quad9' | 'google'): void {
   const dohServers: Record<string, string> = {
     cloudflare: 'https://cloudflare-dns.com/dns-query',
     quad9: 'https://dns.quad9.net/dns-query',
     google: 'https://dns.google/dns-query'
   };
-  const server = dohServers[provider] || '';
-  if (server) {
-    // Electron 28 does not expose DoH API; log for now
-    console.log('[TekeliBrowser] DoH provider set (logged):', provider);
-  }
+  app.configureHostResolver({ secureDnsMode: 'automatic', secureDnsServers: [dohServers[provider]] });
+  console.log('[TekeliBrowser] DoH enabled:', provider);
 }
 
-/** Apply fingerprint defender via preload script */
-function applyFingerprintDefender(ses: Electron.Session): void {
-  const fpScript = `
-    (function() {
-      const rand = Math.random().toString(36).slice(2);
-      const inject = (prop, value) => {
-        try {
-          Object.defineProperty(window.navigator, prop, {
-            get: () => value,
-            configurable: false
-          });
-        } catch {}
-      };
-      inject('deviceMemory', 8);
-      inject('hardwareConcurrency', 4);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const { width, height } = canvas;
-      const imageData = ctx.getImageData(0, 0, width, height);
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        imageData.data[i] = (imageData.data[i] + Math.floor(Math.random() * 2)) % 256;
-      }
-      ctx.putImageData(imageData, 0, 0);
-      console.log('[FP] Canvas fingerprint randomized');
-    })();
-  `;
-  // Electron 28 does not expose addPreloadScript; inject via webview preload instead
-  console.log('[TekeliBrowser] Fingerprint defender script ready (will inject via webviewPreload)');
-}
-
-/** Apply privacy user-agent */
+/** Use Electron's real Chromium UA minus the app/Electron tokens so UA and client hints agree. */
 function applyPrivacyUserAgent(ses: Electron.Session): void {
-  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  const ua = ses.getUserAgent().replace(/\s?(Electron|tekeli-browser|TekeliBrowser)\/\S+/gi, '');
   ses.setUserAgent(ua);
-  console.log('[TekeliBrowser] Privacy user-agent set');
+  console.log('[TekeliBrowser] User-agent normalized');
 }
 
 /** Initialize webview session with privacy settings */
@@ -319,8 +246,7 @@ async function initializeWebviewSession(): Promise<void> {
   
   // Apply settings
   applyHttpsOnlyMode(ses);
-  applyDoH(ses, 'cloudflare');
-  applyFingerprintDefender(ses);
+  applyDoH('cloudflare');
   applyPrivacyUserAgent(ses);
   
   // Apply cookie policy
@@ -359,6 +285,8 @@ function createWindow() {
     trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: '#0A0A0A'
   });
+
+  trustWebContents(mainWindow.webContents.id);
 
   // Show when ready (prevents white flash)
   mainWindow.once('ready-to-show', () => {
@@ -819,12 +747,6 @@ function setupIpcHandlers(): void {
     return { success: true };
   });
 
-  // Auto-updater
-  ipcMain.handle('check-for-updates', async (event) => {
-    if (!isValidSender(event)) throw new Error('Invalid sender');
-    return await checkForUpdatesOnStartup();
-  });
-
   // Ad blocker stats
   ipcMain.handle('get-adblock-stats', async (event) => {
     if (!isValidSender(event)) throw new Error('Invalid sender');
@@ -1047,19 +969,13 @@ app.whenReady().then(async () => {
   initBookmarksManager();
   initOmniboxManager();
   initAuthManager();
-  initSpacesManager();
   initIncognitoManager();
-  initializeAdvancedFeatures();
 
   // Load privacy settings and apply
   setTrackerBlocking(getTrackerBlocking());
 
   // Create main window first to avoid "background running / no UI" if init hangs
   createWindow();
-
-  initGhosteryAdBlocker().catch((err) => {
-    console.error('[TekeliBrowser] Ghostery adblocker init failed:', err);
-  });
 
   // Initialize webview session (async, non-blocking)
   initializeWebviewSession().catch((err) => {
@@ -1088,7 +1004,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  flushDatabase();
+  closeDatabase();
+  flushLogsSync();
 });
 
 // Handle uncaught exceptions gracefully
