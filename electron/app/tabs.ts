@@ -8,6 +8,8 @@ import { t, type Lang, type MessageKey } from '../../shared/i18n';
 import type { Settings } from '../../shared/settings';
 import { log } from '../core/logger';
 import { matchShortcut, type ShortcutAction } from './shortcuts';
+import { blockedOnPage } from '../privacy/adblock';
+import { takeUpgradeOrigin } from '../privacy/pipeline';
 
 export type SecurityState = 'secure' | 'insecure' | 'internal' | 'none';
 
@@ -22,6 +24,7 @@ export interface TabInfo {
   audible: boolean;
   muted: boolean;
   pinned: boolean;
+  blocked: number;
   security: SecurityState;
 }
 
@@ -153,7 +156,7 @@ export class TabManager {
     const id = nextId++;
     const info: TabInfo = {
       id, url, title: '', favicon: null, loading: false, canGoBack: false, canGoForward: false,
-      audible: false, muted: false, pinned: false, security: securityOf(url),
+      audible: false, muted: false, pinned: false, blocked: 0, security: securityOf(url),
     };
     const entry: Entry = { info, view };
 
@@ -299,6 +302,9 @@ export class TabManager {
     c.findInPage(text, { forward, findNext });
   }
 
+  /** Re-sync derived data (e.g. blocked counters) for every tab. */
+  refreshAll(): void { for (const e of this.entries) this.sync(e); }
+
   stopFind(): void { this.activeContents?.stopFindInPage('clearSelection'); }
   print(): void { this.activeContents?.print(); }
   devtools(): void {
@@ -334,6 +340,7 @@ export class TabManager {
     entry.info.canGoBack = c.navigationHistory.canGoBack();
     entry.info.canGoForward = c.navigationHistory.canGoForward();
     entry.info.audible = c.isCurrentlyAudible();
+    entry.info.blocked = blockedOnPage(c.id);
     this.queueEmit();
   }
 
@@ -362,7 +369,11 @@ export class TabManager {
     });
     c.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
       if (!isMainFrame || code === -3 || failedUrl.startsWith('tekeli://')) return;
-      const q = new URLSearchParams({ kind: 'load', code: String(code), desc, url: failedUrl });
+      const upgradedFrom = takeUpgradeOrigin(failedUrl, c.id);
+      const isCert = code <= -200 && code >= -299;
+      const q = upgradedFrom
+        ? new URLSearchParams({ kind: 'https', code: String(code), desc, url: upgradedFrom })
+        : new URLSearchParams({ kind: isCert ? 'cert' : 'load', code: String(code), desc, url: failedUrl });
       this.loadSafely(c, `tekeli://error?${q.toString()}`);
     });
     c.on('render-process-gone', (_e, details) => {

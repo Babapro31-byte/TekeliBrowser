@@ -8,7 +8,8 @@ import { registerTekeliProtocol } from './app/protocol';
 import { applyDoh, configureSession } from './app/sessions';
 import { flushSettings, getSettings, initSettings, onSettingsChanged } from './app/settingsStore';
 import { allContexts, createWindow, initWindowSettingsEffects, markQuitting, readSession, saveSessionNow } from './app/window';
-import { initAdBlocker } from './adBlocker';
+import { initAdblock } from './privacy/adblock';
+import { installCertHandler } from './privacy/certs';
 
 installConsoleLogging();
 app.setAppUserModelId('com.tekeli.browser');
@@ -41,10 +42,11 @@ if (!app.requestSingleInstanceLock()) {
     registerTekeliProtocol(path.join(__dirname, '../dist'));
     registerAppIpc();
     initWindowSettingsEffects();
+    installCertHandler();
 
     const webSession = session.fromPartition('persist:web');
     configureSession(webSession);
-    initAdBlocker(webSession).catch((err) => log.error('[main] ad blocker init failed:', err));
+    void initAdblock();
     applyDoh(settings);
     onSettingsChanged((s, changed) => { if (changed.includes('dohMode') || changed.includes('dohProvider')) applyDoh(s); });
 

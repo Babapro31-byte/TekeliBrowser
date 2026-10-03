@@ -43,9 +43,9 @@ const MOCK_TABS: TabsState = {
   activeId: 2,
   canReopen: true,
   tabs: [
-    { id: 1, url: 'tekeli://newtab', title: 'Yeni sekme', favicon: null, loading: false, canGoBack: false, canGoForward: false, audible: false, muted: false, pinned: false, security: 'internal' },
-    { id: 2, url: 'https://github.com/Babapro31-byte/TekeliBrowser', title: 'GitHub — Tekeli', favicon: null, loading: true, canGoBack: true, canGoForward: false, audible: false, muted: false, pinned: false, security: 'secure' },
-    { id: 3, url: 'https://tr.wikipedia.org/wiki/Gizlilik', title: 'Gizlilik — Vikipedi', favicon: null, loading: false, canGoBack: false, canGoForward: false, audible: true, muted: false, pinned: false, security: 'secure' },
+    { id: 1, url: 'tekeli://newtab', title: 'Yeni sekme', favicon: null, loading: false, canGoBack: false, canGoForward: false, audible: false, muted: false, pinned: false, blocked: 12, security: 'internal' },
+    { id: 2, url: 'https://github.com/Babapro31-byte/TekeliBrowser', title: 'GitHub — Tekeli', favicon: null, loading: true, canGoBack: true, canGoForward: false, audible: false, muted: false, pinned: false, blocked: 12, security: 'secure' },
+    { id: 3, url: 'https://tr.wikipedia.org/wiki/Gizlilik', title: 'Gizlilik — Vikipedi', favicon: null, loading: false, canGoBack: false, canGoForward: false, audible: true, muted: false, pinned: false, blocked: 12, security: 'secure' },
   ],
 };
 

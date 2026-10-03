@@ -12,6 +12,7 @@ export interface TabInfo {
   audible: boolean;
   muted: boolean;
   pinned: boolean;
+  blocked: number;
   security: 'secure' | 'insecure' | 'internal' | 'none';
 }
 

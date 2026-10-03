@@ -157,6 +157,10 @@ const en = {
   'tab.unmute': 'Unmute tab',
   'tab.pin': 'Pin tab',
   'tab.unpin': 'Unpin tab',
+  'shield.blocked': '%n items blocked on this page',
+  'shield.siteOn': 'Blocker is on for this site',
+  'shield.settings': 'Privacy settings…',
+  'shield.off': 'Blocking is turned off in settings',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -316,6 +320,10 @@ const tr: Record<MessageKey, string> = {
   'tab.unmute': 'Sesi aç',
   'tab.pin': 'Sekmeyi sabitle',
   'tab.unpin': 'Sabitlemeyi kaldır',
+  'shield.blocked': 'Bu sayfada %n öğe engellendi',
+  'shield.siteOn': 'Bu sitede engelleyici açık',
+  'shield.settings': 'Gizlilik ayarları…',
+  'shield.off': 'Engelleme ayarlardan kapatılmış',
 };
 
 const dictionaries: Record<Lang, Record<MessageKey, string>> = { en, tr };

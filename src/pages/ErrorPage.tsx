@@ -40,7 +40,12 @@ export function ErrorPage() {
         <div className="flex flex-wrap gap-2 pt-1">
           <Button variant="primary" onClick={primary}>{t(k.back)}</Button>
           {k.cont && url && (
-            <Button variant={k.tone === 'danger' ? 'danger' : 'ghost'} onClick={() => void invoke('tabs:do', { type: 'navigate', input: url })}>{t(k.cont)}</Button>
+            <Button
+              variant={k.tone === 'danger' ? 'danger' : 'ghost'}
+              onClick={() => void invoke('tabs:do', { type: kind === 'cert' ? 'allow-cert' : 'allow-http', url })}
+            >
+              {t(k.cont)}
+            </Button>
           )}
         </div>
       </div>

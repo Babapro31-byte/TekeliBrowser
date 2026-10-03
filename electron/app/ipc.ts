@@ -1,5 +1,9 @@
 /** IPC surface for the chrome UI and tekeli:// internal pages. All handlers go through core/ipc (sender checked). */
 import { Menu, app, clipboard, nativeTheme, shell } from 'electron';
+import { randomInt } from 'node:crypto';
+import { getHostname } from 'tldts';
+import { blockedOnPage, blockedTotal } from '../privacy/adblock';
+import { allowCertException } from '../privacy/certs';
 import { handle, listen } from '../core/ipc';
 import {
   addBookmark, clearHistory, deleteHistoryEntry, getBookmarks, getHistory, getSuggestions, isBookmarked,
@@ -19,6 +23,8 @@ type TabCommand =
   | { type: 'back' | 'forward' | 'reload' | 'stop' | 'home' | 'reopen' }
   | { type: 'new-window'; private?: boolean }
   | { type: 'show-menu' }
+  | { type: 'show-shield' }
+  | { type: 'allow-http' | 'allow-cert'; url: string }
   | { type: 'action'; action: ShortcutAction }
   | { type: 'open-internal'; page: 'settings' | 'history' | 'bookmarks' | 'downloads'; sub?: string };
 
@@ -30,7 +36,17 @@ const MENU_ACTIONS = new Set<ShortcutAction>([
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 const isStr = (v: unknown, max = 4096): v is string => typeof v === 'string' && v.length <= max;
 
+const privacySeed = randomInt(1, 2 ** 31 - 1);
+
 export function registerAppIpc(): void {
+  // Frame preload of web pages reads this synchronously; it only exposes non-sensitive flags.
+  listen('privacy:config', (event) => {
+    const s = getSettings();
+    event.returnValue = { gpc: s.gpc, fingerprint: s.fingerprint, seed: privacySeed };
+  }, { trusted: false });
+
+  handle('privacy:stats', () => ({ total: blockedTotal() }));
+
   listen('app:bootstrap', (event) => {
     const ctx = ctxFromSender(event.sender);
     event.returnValue = {
@@ -71,6 +87,9 @@ export function registerAppIpc(): void {
       case 'home': tabs.home(); break;
       case 'reopen': tabs.reopenClosed(); break;
       case 'show-menu': showAppMenu(ctx); break;
+      case 'show-shield': showShieldMenu(ctx); break;
+      case 'allow-http': if (isStr(cmd.url)) allowHttp(ctx, cmd.url); break;
+      case 'allow-cert': if (isStr(cmd.url)) allowCert(ctx, cmd.url); break;
       case 'new-window': createWindow({ isPrivate: !!cmd.private }).tabs.create('tekeli://newtab', { focusOmnibox: true }); break;
       case 'action': if (MENU_ACTIONS.has(cmd.action)) runAction(ctx, cmd.action, null); break;
       case 'open-internal':
@@ -146,4 +165,54 @@ function showAppMenu(ctx: NonNullable<ReturnType<typeof ctxFromSender>>): void {
   ]);
   const [w] = ctx.win.getContentSize();
   menu.popup({ window: ctx.win, x: Math.max(0, w - 200), y: 84 });
+}
+
+function activeInfo(ctx: NonNullable<ReturnType<typeof ctxFromSender>>) {
+  const state = ctx.tabs.getState();
+  return state.tabs.find((t) => t.id === state.activeId) ?? null;
+}
+
+function showShieldMenu(ctx: NonNullable<ReturnType<typeof ctxFromSender>>): void {
+  const lang = currentLang();
+  const L = (k: Parameters<typeof t>[1]) => t(lang, k);
+  const tab = activeInfo(ctx);
+  const s = getSettings();
+  const wc = tab ? ctx.tabs.contentsOf(tab.id) : null;
+  const host = tab && /^https?:/i.test(tab.url) ? getHostname(tab.url) : null;
+  const allowed = !!host && s.adblockAllowlist.some((d) => host === d || host.endsWith(`.${d}`));
+  const items: Electron.MenuItemConstructorOptions[] = [
+    { label: L('shield.blocked').replace('%n', String(wc ? blockedOnPage(wc.id) : 0)), enabled: false },
+    { type: 'separator' },
+  ];
+  if (!s.adblockEnabled) items.push({ label: L('shield.off'), enabled: false });
+  else if (host) {
+    items.push({
+      label: L('shield.siteOn'),
+      type: 'checkbox',
+      checked: !allowed,
+      click: () => {
+        const list = allowed ? s.adblockAllowlist.filter((d) => d !== host) : [...s.adblockAllowlist, host];
+        updateSettings({ adblockAllowlist: list });
+        ctx.tabs.reload(false);
+      },
+    });
+  }
+  items.push({ type: 'separator' }, { label: L('shield.settings'), click: () => openInternal(ctx, 'settings', 'privacy') });
+  const [w] = ctx.win.getContentSize();
+  Menu.buildFromTemplate(items).popup({ window: ctx.win, x: Math.max(0, w - 260), y: 84 });
+}
+
+function allowHttp(ctx: NonNullable<ReturnType<typeof ctxFromSender>>, url: string): void {
+  const host = /^http:/i.test(url) ? getHostname(url) : null;
+  if (!host) return;
+  const s = getSettings();
+  if (!s.httpsAllowlist.includes(host)) updateSettings({ httpsAllowlist: [...s.httpsAllowlist, host] });
+  ctx.tabs.navigate(null, url);
+}
+
+function allowCert(ctx: NonNullable<ReturnType<typeof ctxFromSender>>, url: string): void {
+  const host = /^https:/i.test(url) ? getHostname(url) : null;
+  if (!host) return;
+  allowCertException(host);
+  ctx.tabs.navigate(null, url);
 }

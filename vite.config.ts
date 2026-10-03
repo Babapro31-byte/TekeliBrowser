@@ -12,6 +12,8 @@ function copyPreloads(): Plugin {
       const dest = path.resolve(__dirname, 'dist-electron');
       fs.mkdirSync(dest, { recursive: true });
       fs.copyFileSync(path.resolve(__dirname, 'electron/preload/app.cjs'), path.join(dest, 'preload-app.cjs'));
+      fs.copyFileSync(path.resolve(__dirname, 'electron/preload/privacy.cjs'), path.join(dest, 'privacy-preload.cjs'));
+      fs.copyFileSync(path.resolve(__dirname, 'node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs'), path.join(dest, 'adblock-preload.cjs'));
     },
   };
 }

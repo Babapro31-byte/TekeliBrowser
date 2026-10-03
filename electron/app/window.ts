@@ -10,6 +10,7 @@ import { getSettings, currentTheme, currentLang, onSettingsChanged, THEME_COLORS
 import { matchShortcut, type ShortcutAction } from './shortcuts';
 import { TabManager, type SessionTab, type TabsState } from './tabs';
 import { configureSession } from './sessions';
+import { onBlockedChanged } from '../privacy/adblock';
 
 export interface WindowCtx {
   win: BrowserWindow;
@@ -168,9 +169,11 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
   });
 
   ctx = { win, tabs, isPrivate, find: { open: false } };
-  contexts.set(win.webContents.id, ctx);
+  const chromeId = win.webContents.id;
+  const offBlocked = onBlockedChanged(() => tabs.refreshAll());
+  contexts.set(chromeId, ctx);
   if (!primary && !isPrivate) primary = ctx;
-  trustWebContents(win.webContents.id);
+  trustWebContents(chromeId);
 
   const relayout = () => tabs.layout();
   win.on('resize', relayout);
@@ -199,9 +202,9 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
 
   win.on('close', () => { if (!isPrivate) saveWindowState(win); if (ctx === primary && !quitting) saveSessionNow(); });
   win.on('closed', () => {
-    contexts.delete(ctx.win.webContents?.id ?? -1);
-    for (const [k, v] of contexts) if (v === ctx) contexts.delete(k);
-    untrustWebContents(-1);
+    contexts.delete(chromeId);
+    untrustWebContents(chromeId);
+    offBlocked();
     tabs.destroyAll();
     if (primary === ctx) primary = allContexts().find((c) => !c.isPrivate) ?? null;
   });
