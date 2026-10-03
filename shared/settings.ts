@@ -17,7 +17,6 @@ export interface Settings {
   reduceMotion: boolean;
   searchEngine: SearchEngineId;
   restoreSession: boolean;
-  defaultZoom: number; // percent
   showBookmarksBar: boolean;
 
   adblockEnabled: boolean;
@@ -43,7 +42,6 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   searchEngine: 'duckduckgo',
   restoreSession: true,
-  defaultZoom: 100,
   showBookmarksBar: false,
 
   adblockEnabled: true,

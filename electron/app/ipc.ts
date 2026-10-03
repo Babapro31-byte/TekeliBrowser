@@ -12,7 +12,7 @@ import {
 import { currentLang, currentTheme, getSettings, updateSettings } from './settingsStore';
 import { t } from '../../shared/i18n';
 import { isSearchInput } from '../../shared/url';
-import { broadcast, createWindow, ctxFromSender, focusedCtx, openInternal, runAction, toggleBookmark } from './window';
+import { broadcast, createWindow, ctxFromSender, focusedCtx, hideOverlay, openInternal, runAction, showOverlay, toggleBookmark, updateOverlay } from './window';
 import type { ShortcutAction } from './shortcuts';
 
 type TabCommand =
@@ -106,6 +106,21 @@ export function registerAppIpc(): void {
     if (typeof cmd?.open === 'boolean' && ctx.find.open !== cmd.open) { ctx.find.open = cmd.open; ctx.tabs.layout(); }
     if (cmd?.stop) ctx.tabs.stopFind();
     else if (isStr(cmd?.text, 500)) ctx.tabs.find(cmd.text as string, cmd.forward !== false, !!cmd.next);
+  });
+
+  // ----- overlay (popups above the page) -----
+  handle('overlay:show', (event, rect: { x: number; y: number; width: number; height: number }, data: unknown) => {
+    const ctx = ctxFromSender(event.sender);
+    const ok = rect && [rect.x, rect.y, rect.width, rect.height].every((n) => typeof n === 'number' && Number.isFinite(n));
+    if (ctx && ok) showOverlay(ctx, rect, data);
+    return { ok: !!ctx && !!ok };
+  });
+  handle('overlay:update', (event, data: unknown) => { const ctx = ctxFromSender(event.sender); if (ctx) updateOverlay(ctx, data); return { ok: true }; });
+  handle('overlay:hide', (event) => { const ctx = ctxFromSender(event.sender); if (ctx) hideOverlay(ctx); return { ok: true }; });
+  handle('overlay:pick', (event, payload: unknown) => {
+    const ctx = ctxFromSender(event.sender);
+    if (ctx && !ctx.win.isDestroyed()) ctx.win.webContents.send('overlay:pick', payload);
+    return { ok: true };
   });
 
   // ----- bookmarks / history / omnibox -----

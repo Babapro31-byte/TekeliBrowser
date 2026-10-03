@@ -1,5 +1,5 @@
 /** Window layer: BrowserWindow + chrome UI (React) + TabManager + action execution. */
-import { BrowserWindow, app, nativeTheme, screen, session, type WebContents } from 'electron';
+import { BrowserWindow, WebContentsView, app, nativeTheme, screen, session, type WebContents } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { internalPageOf } from '../../shared/url';
@@ -19,6 +19,7 @@ export interface WindowCtx {
   find: { open: boolean };
   permBar: boolean;
   saveBar: boolean;
+  overlay: { view: WebContentsView; ready: boolean; pending: unknown } | null;
 }
 
 const TAB_STRIP = 40;
@@ -42,6 +43,7 @@ export const allContexts = () => [...contexts.values()];
 export function ctxFromSender(sender: WebContents): WindowCtx | null {
   const direct = contexts.get(sender.id);
   if (direct) return direct;
+  for (const ctx of contexts.values()) if (ctx.overlay?.view.webContents.id === sender.id) return ctx;
   for (const ctx of contexts.values()) if (ctx.tabs.tabIdFor(sender.id) !== null) return ctx;
   return null;
 }
@@ -171,7 +173,7 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
     onFullscreen: (on) => { win.setFullScreen(on); tabs.setFullscreenInset(on); },
   });
 
-  ctx = { win, tabs, isPrivate, find: { open: false }, permBar: false, saveBar: false };
+  ctx = { win, tabs, isPrivate, find: { open: false }, permBar: false, saveBar: false, overlay: null };
   const chromeId = win.webContents.id;
   const offBlocked = onBlockedChanged(() => tabs.refreshAll());
   contexts.set(chromeId, ctx);
@@ -208,6 +210,7 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
     contexts.delete(chromeId);
     untrustWebContents(chromeId);
     offBlocked();
+    if (ctx.overlay) { untrustWebContents(ctx.overlay.view.webContents.id); try { ctx.overlay.view.webContents.close(); } catch { /* gone */ } }
     tabs.destroyAll();
     if (primary === ctx) primary = allContexts().find((c) => !c.isPrivate) ?? null;
   });
@@ -217,6 +220,51 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
 }
 
 export function markQuitting(): void { quitting = true; }
+
+// ---------- overlay (popups drawn above the page views) ----------
+export interface OverlayRect { x: number; y: number; width: number; height: number }
+
+function ensureOverlay(ctx: WindowCtx): NonNullable<WindowCtx['overlay']> {
+  if (ctx.overlay) return ctx.overlay;
+  const view = new WebContentsView({
+    webPreferences: { preload: preloadPath(), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
+  });
+  view.setBackgroundColor('#00000000');
+  view.setVisible(false);
+  const state = { view, ready: false, pending: null as unknown };
+  trustWebContents(view.webContents.id);
+  view.webContents.on('did-finish-load', () => {
+    state.ready = true;
+    if (state.pending !== null) view.webContents.send('overlay:data', state.pending);
+  });
+  view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  view.webContents.on('will-navigate', (e) => e.preventDefault());
+  ctx.overlay = state;
+  void view.webContents.loadURL('tekeli://overlay');
+  return state;
+}
+
+export function showOverlay(ctx: WindowCtx, rect: OverlayRect, data: unknown): void {
+  const o = ensureOverlay(ctx);
+  o.pending = data;
+  o.view.setBounds({ x: Math.round(rect.x), y: Math.round(rect.y), width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height)) });
+  ctx.win.contentView.addChildView(o.view); // re-adding moves it above the tab views
+  o.view.setVisible(true);
+  if (o.ready) o.view.webContents.send('overlay:data', data);
+}
+
+export function updateOverlay(ctx: WindowCtx, data: unknown): void {
+  if (!ctx.overlay) return;
+  ctx.overlay.pending = data;
+  if (ctx.overlay.ready) ctx.overlay.view.webContents.send('overlay:data', data);
+}
+
+export function hideOverlay(ctx: WindowCtx): void {
+  if (!ctx.overlay) return;
+  ctx.overlay.pending = null;
+  ctx.overlay.view.setVisible(false);
+  if (ctx.overlay.ready) ctx.overlay.view.webContents.send('overlay:data', null);
+}
 
 // ---------- actions ----------
 const INTERNAL_BASE = (page: string) => `tekeli://${page}`;

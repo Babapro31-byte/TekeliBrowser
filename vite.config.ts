@@ -51,7 +51,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
-      input: { chrome: path.resolve(__dirname, 'chrome.html'), pages: path.resolve(__dirname, 'pages.html') },
+      input: { chrome: path.resolve(__dirname, 'chrome.html'), pages: path.resolve(__dirname, 'pages.html'), overlay: path.resolve(__dirname, 'overlay.html') },
     },
   },
 });

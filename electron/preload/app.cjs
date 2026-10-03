@@ -14,6 +14,7 @@ if (location.protocol === 'tekeli:') {
     'omnibox:suggest',
     'app:copy', 'app:openExternal', 'app:info',
     'downloads:list', 'downloads:do',
+    'overlay:show', 'overlay:update', 'overlay:hide', 'overlay:pick',
     'password:respond', 'password:pending',
     'update:state', 'update:check', 'update:download', 'update:install',
     'data:clear',
@@ -22,7 +23,7 @@ if (location.protocol === 'tekeli:') {
   ]);
   const ON = new Set([
     'tabs:state', 'settings:changed', 'chrome:focus-omnibox', 'chrome:open-find', 'find:result',
-    'bookmarks:changed', 'history:changed', 'downloads:changed', 'permissions:state', 'update:state', 'password:prompt',
+    'bookmarks:changed', 'history:changed', 'downloads:changed', 'permissions:state', 'update:state', 'password:prompt', 'overlay:data', 'overlay:pick',
   ]);
 
   let boot = null;
