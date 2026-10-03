@@ -1,27 +1,24 @@
-## [2.1.0] - 2026-02-08
+## [4.0.0]
 
-### Profesyonel Performans & Gizlilik Paketi
+Yeniden yazım. Eski sürümlerdeki çekirdek sorunlar giderildi.
 
-#### Performans
-- HTTP/3 + QUIC + Early-Hints desteği (First-Byte %20-30 hızlanma)
-- Predictive Prefetch Engine – viewport yakını linklerin ML tabanlı prefetch’i
-- Adaptive Resource Policy – native lazy-loading, LCP 1.5 s altı
-- GPU Raster & Zero-Copy build flag’leri – WebGL/Canvas FPS %25-35 artış
-- Vendor chunk split – ilk yük hızlanması
+### Mimari
+- Tek `<webview>` yerine sekme başına `WebContentsView`; `tekeli://` iç sayfaları (yeni sekme, ayarlar, geçmiş, yer imleri, indirmeler, hata).
+- Ayarlar tek yerde (ana süreç), şema doğrulamalı ve atomik yazılır; açılışta yüklenir.
+- Electron 28 → 44, Vite 7, `node:sqlite` (WASM/sql.js kalktı).
+- Tek kısayol tablosu (büyük/küçük harf duyarsız), tip güvenli ve sender doğrulamalı IPC.
 
-#### Gizlilik
-- DNS-over-HTTPS (DoH) – Cloudflare/Quad9/Google seçenekleri, plaintext DNS yok
-- HTTPS-Only Mode – http→https otomatik, downgrade’te interstitial
-- Stateless Partition + Network-State Isolation – sekme başına ayrı partition, 3. parti çerezler default kapalı
-- Advanced Fingerprint Defender – Canvas/WebGL/Audio randomize, Client-Hints minimum
-- Secure User-Agent – sabit Chrome 122 UA, spoofing opsiyonu
+### Gizlilik ve güvenlik
+- Tek istek hattı: HTTPS-only (yedekli uyarı sayfası), Ghostery reklam/izleyici motoru (kozmetik filtre + scriptlet dahil), izleme parametresi temizleme, üçüncü taraf çerez filtresi (registrable domain ile), GPC.
+- Sertifika hataları için uyarı sayfası (otomatik kabul yok); tam origin anahtarlı site izinleri ve izin çubuğu.
+- Gizli pencere (bellek içi oturum), tarama verilerini gerçekten temizleme, çıkışta temizleme.
+- Şifre yöneticisi `safeStorage` ile yeniden yazıldı.
+- Eski sürümdeki `executeJavaScript` enjeksiyonu, `file://` webview izni ve substring tabanlı engelleme hataları kaldırıldı.
 
-#### Şifre Yöneticisi
-- AES-256-GCM + master-password ile şifre kasası
-- Have-I-Been-Pwned breach-monitor
-- Güvenli autofill (sadece top-level + user-gesture)
+### Arayüz
+- Figma tasarımından üretilen token'lar; Koyu/Açık/OLED; Inter ve ikonlar yerel (Google CDN yok).
+- Ayarlar sayfası ortalı ve sekme olarak açılır; sahte durum çubuğu ve ölü düğmeler kaldırıldı.
 
-#### Diğer
-- Single-instance lock – ikinci başlatma var olan pencereyi öne getirir
-- Persistent log – `userData/tekeli.log` debug kolaylığı
-- Omnibox auto-suggest, yer imi toggle, kısayollar tamamlandı
+### Güncelleme
+- Zorla yeniden başlatma yok; Ayarlar > Güncelleme ve araç çubuğu bildirimi.
+- Sürüm yayını önce taslak, tüm dosyalar yüklenince yayın (latest.yml 404 yarışı biter).

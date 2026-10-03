@@ -1,94 +1,31 @@
-# TekeliBrowser 🚀
+# TekeliBrowser
 
-Ultra-modern masaüstü tarayıcısı - Chrome'un kullanım kolaylığını geleceğin tasarımıyla birleştiriyor.
+Özel, hızlı, korumalı masaüstü tarayıcı (Windows). Electron + React.
 
-## ✨ Özellikler
+- **Gerçek sekmeler:** her sekme ayrı bir `WebContentsView`; sekme değiştirince sayfa, kaydırma ve form durumu korunur.
+- **Gizlilik varsayılan:** reklam/izleyici engelleme (Ghostery motoru, EasyList/EasyPrivacy/uBlock), site başı aç/kapa, yalnızca-HTTPS (yedekli, yerel adres muaf), güvenli DNS, üçüncü taraf çerez engeli, GPC, parmak izi koruması (Kapalı/Standart/Sıkı), gizli pencere, sertifika uyarıları, site izinleri.
+- **Şifre yöneticisi:** `safeStorage` (Windows DPAPI) ile şifreli; giriş formundan "kaydet?" çubuğu.
+- **Otomatik güncelleme:** GitHub Releases; yeniden başlatmaya sen karar verirsin.
+- **Tema:** Koyu / Açık / OLED + 5 vurgu rengi, TR/EN.
 
-- **Glassmorphism & Neon Tasarım**: Fütüristik ve modern arayüz
-- **Chrome Stili Sekmeler**: Üstte sürüklenebilir sekme çubuğu
-- **Split View**: Ekranı dikey olarak ikiye bölme özelliği
-- **AI Sidebar**: Gizlenebilir yapay zeka asistan paneli (yakında)
-- **Çerçevesiz Pencere**: Tam özelleştirilmiş titlebar
-- **Hızlı ve Performanslı**: Electron + React + Vite
+## Geliştirme
 
-## 🛠️ Teknoloji Yığını
-
-- **Electron.js** - Desktop framework
-- **React 18** - UI library
-- **TypeScript** - Type safety
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **Framer Motion** - Animations
-
-## 🚀 Kurulum ve Çalıştırma
-
-### Gereksinimler
-- Node.js 18 veya üzeri
-- npm veya yarn
-
-### Adımlar
-
-1. Bağımlılıkları yükleyin:
 ```bash
 npm install
+npm run dev        # Vite + Electron
+npm run typecheck  # renderer + main process
+npm test           # birim testler (vitest)
+npm run build      # NSIS kurulum dosyası -> release/
 ```
 
-2. Geliştirme modunda çalıştırın:
-```bash
-npm run electron:dev
-```
+Gereksinimler: Node 24+, Windows. Mimari için [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), tasarım token'ları için [design-system/TOKENS.md](design-system/TOKENS.md).
 
-3. Production build:
-```bash
-npm run build
-```
+## Sürüm çıkarma
 
-## 📁 Proje Yapısı
+`package.json` sürümünü yükselt, `vX.Y.Z` etiketi at. `release.yml` kurulum dosyasını önce taslak sürüme yükler, tüm dosyalar (`latest.yml` dahil) hazır olunca yayınlar. Kurulum dosyası imzasızdır; Windows SmartScreen uyarı gösterebilir.
 
-```
-TekeliBrowser/
-├── electron/           # Electron main process
-│   ├── main.ts        # Ana electron dosyası
-│   └── preload.ts     # IPC bridge
-├── src/               # React renderer process
-│   ├── components/    # UI bileşenleri
-│   │   ├── Titlebar.tsx
-│   │   ├── TabBar.tsx
-│   │   ├── AddressBar.tsx
-│   │   ├── WebViewContainer.tsx
-│   │   └── AISidebar.tsx
-│   ├── App.tsx        # Ana uygulama
-│   ├── main.tsx       # React entry point
-│   └── index.css      # Global styles
-├── package.json
-├── vite.config.ts
-├── tailwind.config.js
-└── tsconfig.json
-```
+## Bilinen eksikler
 
-## 🎨 Tasarım Özellikleri
-
-- **Koyu Tema**: Varsayılan olarak göz dostu karanlık tema
-- **Neon Vurgular**: Mavi (#00f0ff) ve mor (#b026ff) neon efektler
-- **Blur Efektleri**: Hafif arka plan bulanıklığı
-- **Smooth Animations**: Framer Motion ile akıcı geçişler
-
-## 🔧 Geliştirme
-
-### Sekme Yönetimi
-Sekmeler state management ile yönetilir ve her sekme kendi webview örneğini içerir.
-
-### IPC İletişimi
-Main ve renderer process arası güvenli IPC bridge ile iletişim sağlanır.
-
-### Split View
-İki sekmeyi aynı anda görüntüleme özelliği ile çoklu görev yapabilirsiniz.
-
-## 📝 Lisans
-
-MIT
-
-## 👨‍💻 Geliştirici
-
-Cursor AI 
-
+- Şifreler için otomatik doldurma yok (kaydetme/yönetme var).
+- Parmak izi "Sıkı" modu bazı siteleri bozabilir.
+- Çerez/site verisi temizleme zaman aralığı desteklemez (her zaman).

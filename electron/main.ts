@@ -17,6 +17,10 @@ import { initPasswordManager } from './passwordManager';
 import { initUpdater } from './app/updater';
 import { registerPasswordPrompt } from './privacy/passwordPrompt';
 
+// Dev builds never touch the installed app's profile.
+if (process.env.TEKELI_USER_DATA) app.setPath('userData', process.env.TEKELI_USER_DATA);
+else if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'tekeli-browser-dev'));
+
 installConsoleLogging();
 app.setAppUserModelId('com.tekeli.browser');
 
