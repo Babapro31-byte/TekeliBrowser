@@ -1,5 +1,8 @@
 name: Release
 
+# Push a tag like v4.0.1 (must match package.json "version").
+# Assets (installer, .blockmap, latest.yml) are uploaded to a DRAFT release first and the release is
+# published only after every asset is there, so auto-update never sees latest.yml without the installer.
 on:
   push:
     tags:
@@ -18,14 +21,40 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
+
+      - name: Check tag matches package version
+        shell: bash
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          if [ "refs/tags/v$v" != "$GITHUB_REF" ]; then
+            echo "Tag $GITHUB_REF does not match package.json version v$v"; exit 1
+          fi
 
       - name: Install
         run: npm ci
 
-      - name: Build + Publish
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+
+      # electron-builder uploads files in parallel and each upload may create its own release when none
+      # exists yet (two releases for one tag, assets split between them). Create the draft once, first.
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --generate-notes
+
+      - name: Build and upload (draft)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build -- --publish always
 
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
