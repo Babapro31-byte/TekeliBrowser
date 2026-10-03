@@ -17,12 +17,15 @@ export interface WindowCtx {
   tabs: TabManager;
   isPrivate: boolean;
   find: { open: boolean };
+  permBar: boolean;
+  saveBar: boolean;
 }
 
 const TAB_STRIP = 40;
 const TOOLBAR = 44;
 const BOOKMARKS_BAR = 32;
 const FIND_BAR = 40;
+const PERM_BAR = 44;
 const contexts = new Map<number, WindowCtx>(); // key: chrome webContents id
 let primary: WindowCtx | null = null;
 let saveTimer: NodeJS.Timeout | null = null;
@@ -146,7 +149,7 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
   });
 
   const partition = isPrivate ? `private-${Date.now()}-${privateCounter++}` : 'persist:web';
-  if (isPrivate) configureSession(session.fromPartition(partition));
+  if (isPrivate) configureSession(session.fromPartition(partition), true);
   let ctx!: WindowCtx;
 
   const tabs = new TabManager({
@@ -155,7 +158,7 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
     preload: preloadPath(),
     isPrivate,
     background: () => THEME_COLORS[currentTheme()].app,
-    topInset: () => chromeInset() + (ctx?.find.open ? FIND_BAR : 0),
+    topInset: () => chromeInset() + (ctx?.find.open ? FIND_BAR : 0) + (ctx?.permBar ? PERM_BAR : 0) + (ctx?.saveBar ? PERM_BAR : 0),
     settings: getSettings,
     lang: currentLang,
     onState: (state: TabsState) => {
@@ -168,7 +171,7 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
     onFullscreen: (on) => { win.setFullScreen(on); tabs.setFullscreenInset(on); },
   });
 
-  ctx = { win, tabs, isPrivate, find: { open: false } };
+  ctx = { win, tabs, isPrivate, find: { open: false }, permBar: false, saveBar: false };
   const chromeId = win.webContents.id;
   const offBlocked = onBlockedChanged(() => tabs.refreshAll());
   contexts.set(chromeId, ctx);

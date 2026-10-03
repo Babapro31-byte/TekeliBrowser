@@ -10,6 +10,7 @@ import { log } from '../core/logger';
 import { matchShortcut, type ShortcutAction } from './shortcuts';
 import { blockedOnPage } from '../privacy/adblock';
 import { takeUpgradeOrigin } from '../privacy/pipeline';
+import { dismissFor } from '../privacy/permissions';
 
 export type SecurityState = 'secure' | 'insecure' | 'internal' | 'none';
 
@@ -349,6 +350,7 @@ export class TabManager {
     const info = entry.info;
 
     c.on('did-start-loading', () => { info.loading = true; this.queueEmit(); });
+    c.on('did-start-navigation', (e) => { if (e.isMainFrame && !e.isSameDocument) dismissFor(c); });
     c.on('did-stop-loading', () => { info.loading = false; this.sync(entry); });
     c.on('did-navigate', () => {
       info.favicon = null;

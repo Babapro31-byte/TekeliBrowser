@@ -46,3 +46,19 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
     try { webFrame.executeJavaScript(code); } catch (e) { /* frame not ready */ }
   }
 }
+
+// ---- login form capture (the user is asked in the window chrome before anything is saved) ----
+if (location.protocol === 'https:' || location.protocol === 'http:') {
+  document.addEventListener('submit', (event) => {
+    try {
+      const form = event.target;
+      if (!form || !form.querySelector) return;
+      const pw = form.querySelector('input[type="password"]');
+      if (!pw || !pw.value) return;
+      const fields = Array.from(form.querySelectorAll('input')).filter((i) => i !== pw && (i.type === 'text' || i.type === 'email' || i.type === 'tel' || !i.type));
+      const user = fields.find((i) => i.value) || null;
+      if (!user) return;
+      ipcRenderer.send('password:capture', { username: user.value, password: pw.value });
+    } catch (e) { /* never interfere with the page */ }
+  }, true);
+}

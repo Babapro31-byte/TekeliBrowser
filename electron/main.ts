@@ -10,6 +10,12 @@ import { flushSettings, getSettings, initSettings, onSettingsChanged } from './a
 import { allContexts, createWindow, initWindowSettingsEffects, markQuitting, readSession, saveSessionNow } from './app/window';
 import { initAdblock } from './privacy/adblock';
 import { installCertHandler } from './privacy/certs';
+import { registerDownloadsIpc } from './app/downloads';
+import { registerPermissionsIpc } from './privacy/permissions';
+import { clearOnExitIfNeeded, registerClearDataIpc } from './privacy/clearData';
+import { initPasswordManager } from './passwordManager';
+import { initUpdater } from './app/updater';
+import { registerPasswordPrompt } from './privacy/passwordPrompt';
 
 installConsoleLogging();
 app.setAppUserModelId('com.tekeli.browser');
@@ -41,6 +47,12 @@ if (!app.requestSingleInstanceLock()) {
 
     registerTekeliProtocol(path.join(__dirname, '../dist'));
     registerAppIpc();
+    registerDownloadsIpc();
+    registerPermissionsIpc();
+    registerClearDataIpc();
+    initPasswordManager();
+    registerPasswordPrompt();
+    initUpdater();
     initWindowSettingsEffects();
     installCertHandler();
 
@@ -62,7 +74,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('activate', () => { if (allContexts().length === 0 && app.isReady()) createWindow().tabs.create('tekeli://newtab'); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
+    if (clearOnExitIfNeeded(() => app.quit())) { event.preventDefault(); return; }
     markQuitting();
     saveSessionNow();
     flushSettings();

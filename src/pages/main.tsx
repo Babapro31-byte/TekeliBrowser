@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '../styles/base.css';
 import { useT } from '../lib/bridge';
 import { Bookmarks } from './Bookmarks';
+import { Downloads } from './Downloads';
 import { ErrorPage } from './ErrorPage';
 import { History } from './History';
 import { NewTab } from './NewTab';
@@ -13,14 +14,16 @@ const PAGES: Record<string, () => ReactElement> = {
   settings: Settings,
   history: History,
   bookmarks: Bookmarks,
+  downloads: Downloads,
   error: ErrorPage,
 };
 
-const TITLES: Record<string, 'tab.new' | 'settings.title' | 'history.title' | 'menu.bookmarks' | 'error.load.title'> = {
+const TITLES: Record<string, 'tab.new' | 'settings.title' | 'history.title' | 'menu.bookmarks' | 'downloads.title' | 'error.load.title'> = {
   newtab: 'tab.new',
   settings: 'settings.title',
   history: 'history.title',
   bookmarks: 'menu.bookmarks',
+  downloads: 'downloads.title',
   error: 'error.load.title',
 };
 

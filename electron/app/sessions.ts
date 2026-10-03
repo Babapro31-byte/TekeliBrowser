@@ -4,6 +4,8 @@ import type { Settings } from '../../shared/settings';
 import path from 'node:path';
 import { attachTekeliProtocol } from './protocol';
 import { installPipeline } from '../privacy/pipeline';
+import { attachDownloads } from './downloads';
+import { configurePermissions } from '../privacy/permissions';
 import { log } from '../core/logger';
 
 /** Drop the Electron/app tokens so the UA matches a real Chromium (client hints stay consistent). */
@@ -11,14 +13,11 @@ export function cleanUserAgent(ua: string): string {
   return ua.replace(/\s?Electron\/\S+/gi, '').replace(/\s?(tekeli-browser|TekeliBrowser)\/\S+/gi, '');
 }
 
-/** Permissions granted without asking. Everything else is denied until the permission UI lands. */
-const SAFE_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock']);
-
-export function configureSession(ses: Session): void {
+export function configureSession(ses: Session, isPrivate = false): void {
   attachTekeliProtocol(ses);
+  attachDownloads(ses, isPrivate);
   ses.setUserAgent(cleanUserAgent(ses.getUserAgent()));
-  ses.setPermissionRequestHandler((_wc, permission, callback) => callback(SAFE_PERMISSIONS.has(permission)));
-  ses.setPermissionCheckHandler((_wc, permission) => SAFE_PERMISSIONS.has(permission));
+  configurePermissions(ses, isPrivate);
   installPipeline(ses);
   for (const file of ['adblock-preload.cjs', 'privacy-preload.cjs']) {
     try { ses.registerPreloadScript({ type: 'frame', filePath: path.join(__dirname, file) }); }

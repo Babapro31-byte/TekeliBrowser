@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { boot, invoke, on, useSettings } from '../lib/bridge';
 import type { BookmarkItem, TabsState } from '../types/tekeli';
 import { FindBar } from './FindBar';
+import { PermissionBar } from './PermissionBar';
+import { SavePasswordBar } from './SavePasswordBar';
 import { TabStrip } from './TabStrip';
 import { Toolbar } from './Toolbar';
 import { Favicon } from '../lib/ui';
@@ -65,6 +67,8 @@ export function ChromeApp() {
       <Toolbar tab={active} canReopen={tabs.canReopen} />
       {settings.showBookmarksBar && <BookmarksBar />}
       {findOpen && <FindBar onClose={closeFind} />}
+      <PermissionBar />
+      <SavePasswordBar />
     </div>
   );
 }

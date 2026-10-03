@@ -1,15 +1,20 @@
-import { Check, Info, Keyboard, Moon, Palette, ShieldCheck, SlidersHorizontal, Sun, Contrast, Monitor, type LucideIcon } from 'lucide-react';
+import { Check, Info, Keyboard, KeyRound, Moon, Palette, RefreshCw, ShieldCheck, SlidersHorizontal, Sun, Trash2, Contrast, Monitor, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import type { AccentId, Settings as SettingsType, ThemeSetting } from '../../shared/settings';
 import type { MessageKey } from '../../shared/i18n';
 import { boot, updateSettings, useSettings, useT } from '../lib/bridge';
-import { Button, Group, PageHeader, Row, Segmented, Select, Toggle, cx } from '../lib/ui';
+import { Button, Group, IconButton, PageHeader, Row, Segmented, Select, Toggle, cx } from '../lib/ui';
+import { DataSection } from './settings/DataSection';
+import { Passwords } from './settings/Passwords';
+import { Updates } from './settings/Updates';
 
-type Section = 'general' | 'privacy' | 'appearance' | 'shortcuts' | 'about';
+type Section = 'general' | 'privacy' | 'appearance' | 'passwords' | 'updates' | 'shortcuts' | 'about';
 const NAV: { id: Section; label: MessageKey; icon: LucideIcon }[] = [
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
   { id: 'privacy', label: 'settings.privacy', icon: ShieldCheck },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
+  { id: 'passwords', label: 'settings.passwords', icon: KeyRound },
+  { id: 'updates', label: 'settings.updates', icon: RefreshCw },
   { id: 'shortcuts', label: 'settings.shortcuts', icon: Keyboard },
   { id: 'about', label: 'settings.about', icon: Info },
 ];
@@ -54,11 +59,21 @@ function Privacy({ s }: { s: SettingsType }) {
         <Row title={t('privacy.exceptions')} desc={`${s.adblockAllowlist.length} ${t('common.sites')} · ${t('privacy.exceptions.desc')}`}>
           {s.adblockAllowlist.length > 0 && <Button variant="ghost" onClick={() => set({ adblockAllowlist: [] })}>{t('common.clear')}</Button>}
         </Row>
+        {s.adblockAllowlist.map((h) => (
+          <Row key={h} title={h}>
+            <IconButton icon={Trash2} label={t('common.delete')} onClick={() => set({ adblockAllowlist: s.adblockAllowlist.filter((x) => x !== h) })} />
+          </Row>
+        ))}
       </Group>
       <Group label={t('privacy.group.connection')}>
         <Row title={t('privacy.https')} desc={t('privacy.https.desc')}>
           <Toggle label={t('privacy.https')} checked={s.httpsOnly} onChange={(v) => set({ httpsOnly: v })} />
         </Row>
+        {s.httpsAllowlist.map((h) => (
+          <Row key={h} title={h} desc="HTTP">
+            <IconButton icon={Trash2} label={t('common.delete')} onClick={() => set({ httpsAllowlist: s.httpsAllowlist.filter((x) => x !== h) })} />
+          </Row>
+        ))}
         <Row title={t('privacy.doh')} desc={t('privacy.doh.desc')}>
           <Select label={t('privacy.doh')} width={150} value={s.dohMode} onChange={(v) => set({ dohMode: v })}
             options={[{ value: 'off', label: t('common.off') }, { value: 'automatic', label: 'Automatic' }, { value: 'secure', label: 'Strict' }]} />
@@ -82,6 +97,7 @@ function Privacy({ s }: { s: SettingsType }) {
           <Toggle label={t('privacy.clearOnExit')} checked={s.clearOnExit} onChange={(v) => set({ clearOnExit: v })} />
         </Row>
       </Group>
+      <DataSection />
     </>
   );
 }
@@ -254,6 +270,8 @@ export function Settings() {
           {section === 'general' && <General s={s} />}
           {section === 'privacy' && <Privacy s={s} />}
           {section === 'appearance' && <Appearance s={s} />}
+          {section === 'passwords' && <Passwords />}
+          {section === 'updates' && <Updates />}
           {section === 'shortcuts' && <Shortcuts />}
           {section === 'about' && <About />}
         </main>

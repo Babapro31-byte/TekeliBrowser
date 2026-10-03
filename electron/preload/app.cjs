@@ -13,10 +13,16 @@ if (location.protocol === 'tekeli:') {
     'history:list', 'history:delete', 'history:clear',
     'omnibox:suggest',
     'app:copy', 'app:openExternal', 'app:info',
+    'downloads:list', 'downloads:do',
+    'password:respond', 'password:pending',
+    'update:state', 'update:check', 'update:download', 'update:install',
+    'data:clear',
+    'password-available', 'password-list', 'password-add', 'password-reveal', 'password-delete', 'password-check-breach',
+    'permissions:respond', 'permissions:pending', 'permissions:list', 'permissions:clear',
   ]);
   const ON = new Set([
     'tabs:state', 'settings:changed', 'chrome:focus-omnibox', 'chrome:open-find', 'find:result',
-    'bookmarks:changed', 'history:changed',
+    'bookmarks:changed', 'history:changed', 'downloads:changed', 'permissions:state', 'update:state', 'password:prompt',
   ]);
 
   let boot = null;
