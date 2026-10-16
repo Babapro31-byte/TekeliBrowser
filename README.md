@@ -4,7 +4,8 @@
 
 - **Gerçek sekmeler:** her sekme ayrı bir `WebContentsView`; sekme değiştirince sayfa, kaydırma ve form durumu korunur.
 - **Gizlilik varsayılan:** reklam/izleyici engelleme (Ghostery motoru, EasyList/EasyPrivacy/uBlock), site başı aç/kapa, yalnızca-HTTPS (yedekli, yerel adres muaf), güvenli DNS, üçüncü taraf çerez engeli, GPC, parmak izi koruması (Kapalı/Standart/Sıkı), gizli pencere, sertifika uyarıları, site izinleri.
-- **Şifre yöneticisi:** `safeStorage` (Windows DPAPI) ile şifreli; giriş formundan "kaydet?" çubuğu.
+- **Şifre yöneticisi:** `safeStorage` (Windows DPAPI) ile şifreli; giriş formundan "kaydet?" çubuğu, kayıtlı girişi tıklayınca doldurma.
+- **Yer imleri:** klasörler, Chrome/Firefox HTML içe/dışa aktarma.
 - **Otomatik güncelleme:** GitHub Releases; yeniden başlatmaya sen karar verirsin.
 - **Tema:** Koyu / Açık / OLED + 5 vurgu rengi, TR/EN.
 
@@ -26,6 +27,7 @@ Gereksinimler: Node 24+, Windows. Mimari için [docs/ARCHITECTURE.md](docs/ARCHI
 
 ## Bilinen eksikler
 
-- Şifreler için otomatik doldurma yok (kaydetme/yönetme var).
+- Şifre doldurma yalnızca tıklayınca çalışır (sessiz otomatik doldurma bilerek yok).
 - Parmak izi "Sıkı" modu bazı siteleri bozabilir.
-- Çerez/site verisi temizleme zaman aralığı desteklemez (her zaman).
+- Tarama verilerini temizlerken zaman aralığı yalnızca geçmişe uygulanır; Electron çerez, site verisi ve önbelleği zamana göre silemez, bunlar her zaman tamamen silinir.
+- Yer imi klasörleri tek seviyedir (iç içe klasör yok; içe aktarmada en içteki klasör adı kullanılır).

@@ -1,6 +1,6 @@
 {
   "name": "tekeli-browser",
-  "version": "4.0.0",
+  "version": "1.0.0",
   "description": "TekeliBrowser — private, fast desktop browser",
   "main": "dist-electron/main.cjs",
   "scripts": {
