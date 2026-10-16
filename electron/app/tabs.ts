@@ -400,11 +400,14 @@ export class TabManager {
     c.on('will-frame-navigate', (e) => { if (e.url.startsWith('tekeli://') && !c.getURL().startsWith('tekeli://')) e.preventDefault(); });
 
     c.setWindowOpenHandler(({ url, disposition }) => {
-      if (/^https?:\/\//i.test(url) || url === 'about:blank') {
-        if (url !== 'about:blank') this.create(url, { activate: disposition !== 'background-tab', afterId: info.id });
-      }
+      if (!/^https?:\/\//i.test(url)) return { action: 'deny' };
+      // window.open(url, name, 'width=…') is a real popup (OAuth / "Sign in with …"): it must keep window.opener,
+      // so it opens as a child window in the same session. Everything else becomes a tab.
+      if (disposition === 'new-window') return { action: 'allow', overrideBrowserWindowOptions: { parent: this.o.win, autoHideMenuBar: true } };
+      this.create(url, { activate: disposition !== 'background-tab', afterId: info.id });
       return { action: 'deny' };
     });
+    c.on('did-create-window', (popup) => this.guardPopup(popup));
 
     c.on('before-input-event', (event, input) => {
       const action = matchShortcut(input);
@@ -415,6 +418,30 @@ export class TabManager {
     });
 
     c.on('context-menu', (_e, params) => this.showContextMenu(entry, params));
+  }
+
+  /** A popup is a plain child window: same session and opener as its tab, but never an app page and no popups of its own. */
+  private guardPopup(popup: BrowserWindow): void {
+    const pc = popup.webContents;
+    popup.removeMenu();
+    const parent = this.o.win.getBounds();
+    const [w, h] = popup.getSize();
+    popup.setPosition(Math.round(parent.x + (parent.width - w) / 2), Math.round(parent.y + (parent.height - h) / 2));
+    // No address bar here, so the real host goes into the title: the user can see where they are signing in.
+    pc.on('page-title-updated', (e, title) => {
+      e.preventDefault();
+      let host = '';
+      try { host = new URL(pc.getURL()).host; } catch { /* keep empty */ }
+      popup.setTitle(host ? `${host} — ${title}` : title);
+    });
+    const guard = (event: { preventDefault(): void }, target: string) => { if (/^(tekeli|file|javascript|data|vbscript):/i.test(target)) event.preventDefault(); };
+    pc.on('will-navigate', (e, target) => guard(e, target));
+    pc.on('will-redirect', (e, target) => guard(e, target));
+    pc.on('will-frame-navigate', (e) => { if (/^tekeli:/i.test(e.url)) e.preventDefault(); });
+    pc.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) this.create(url, { activate: true });
+      return { action: 'deny' };
+    });
   }
 
   private showContextMenu(entry: Entry, params: Electron.ContextMenuParams): void {
