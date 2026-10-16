@@ -1,5 +1,5 @@
 /** History, bookmarks and omnibox data. Plain functions over db.ts; IPC wiring lives in app/ipc.ts. */
-import { dbAll, dbGet, dbRun } from '../db';
+import { dbAll, dbExec, dbGet, dbRun } from '../db';
 
 export interface HistoryEntry {
   url: string;
@@ -13,6 +13,7 @@ export interface BookmarkEntry {
   url: string;
   title: string;
   createdAt: number;
+  folder: string;
 }
 
 export type SuggestionKind = 'history' | 'bookmark';
@@ -95,14 +96,45 @@ export function getBookmarks(opts: { search?: string; limit?: number } = {}): Bo
   const limit = Math.min(Math.max(opts.limit ?? 500, 1), 2000);
   const q = (opts.search ?? '').trim();
   if (!q) {
-    return dbAll<BookmarkEntry>(`SELECT id, url, title, created_at AS createdAt FROM bookmarks ORDER BY created_at DESC LIMIT ?`, [limit]);
+    return dbAll<BookmarkEntry>(`SELECT id, url, title, created_at AS createdAt, folder FROM bookmarks ORDER BY created_at DESC LIMIT ?`, [limit]);
   }
   const like = `%${likeEscape(q)}%`;
   return dbAll<BookmarkEntry>(
-    `SELECT id, url, title, created_at AS createdAt FROM bookmarks
+    `SELECT id, url, title, created_at AS createdAt, folder FROM bookmarks
      WHERE url LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT ?`,
     [like, like, limit],
   );
+}
+
+export function setBookmarkFolder(url: string, folder: string): void {
+  dbRun('UPDATE bookmarks SET folder = ? WHERE url = ?', [folder.trim().slice(0, 100), url]);
+}
+
+export function listBookmarkFolders(): string[] {
+  return dbAll<{ folder: string }>(`SELECT DISTINCT folder FROM bookmarks WHERE folder <> '' ORDER BY folder COLLATE NOCASE`).map((r) => r.folder);
+}
+
+/** Existing bookmarks keep their title and creation time; only a missing folder is filled in. Returns how many were new. */
+export function importBookmarks(items: { url: string; title: string; folder: string }[]): number {
+  let added = 0;
+  const now = Date.now();
+  dbExec('BEGIN');
+  try {
+    for (const b of items) {
+      if (!isTrackable(b.url)) continue;
+      if (!isBookmarked(b.url)) added++;
+      dbRun(
+        `INSERT INTO bookmarks (url, title, created_at, folder) VALUES (?, ?, ?, ?)
+         ON CONFLICT(url) DO UPDATE SET folder = CASE WHEN bookmarks.folder = '' THEN excluded.folder ELSE bookmarks.folder END`,
+        [b.url, b.title || b.url, now, b.folder],
+      );
+    }
+    dbExec('COMMIT');
+  } catch (error) {
+    dbExec('ROLLBACK');
+    throw error;
+  }
+  return added;
 }
 
 // ---------- omnibox ----------

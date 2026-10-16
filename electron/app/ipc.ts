@@ -1,14 +1,16 @@
 /** IPC surface for the chrome UI and tekeli:// internal pages. All handlers go through core/ipc (sender checked). */
-import { Menu, app, clipboard, nativeTheme, shell } from 'electron';
+import { Menu, app, clipboard, dialog, nativeTheme, shell } from 'electron';
 import { randomInt } from 'node:crypto';
+import fs from 'node:fs/promises';
 import { getHostname } from 'tldts';
 import { blockedOnPage, blockedTotal } from '../privacy/adblock';
 import { allowCertException } from '../privacy/certs';
 import { handle, listen } from '../core/ipc';
 import {
   addBookmark, clearHistory, deleteHistoryEntry, getBookmarks, getHistory, getSuggestions, isBookmarked,
-  recordSearchQuery, removeBookmark,
+  importBookmarks, recordSearchQuery, removeBookmark, setBookmarkFolder,
 } from '../data/store';
+import { parseNetscapeHtml, toNetscapeHtml } from '../data/bookmarkIo';
 import { currentLang, currentTheme, getSettings, updateSettings } from './settingsStore';
 import { t } from '../../shared/i18n';
 import { isSearchInput } from '../../shared/url';
@@ -35,6 +37,8 @@ const MENU_ACTIONS = new Set<ShortcutAction>([
 
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 const isStr = (v: unknown, max = 4096): v is string => typeof v === 'string' && v.length <= max;
+
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 const privacySeed = randomInt(1, 2 ** 31 - 1);
 
@@ -129,6 +133,31 @@ export function registerAppIpc(): void {
   handle('bookmarks:list', (_e, search?: string) => ({ items: getBookmarks({ search: isStr(search, 200) ? search : '' }) }));
   handle('bookmarks:add', (_e, url: string, title: string) => { if (isStr(url) && isStr(title, 500)) { addBookmark(url, title); broadcast('bookmarks:changed'); } return { ok: true }; });
   handle('bookmarks:remove', (_e, url: string) => { if (isStr(url)) { removeBookmark(url); broadcast('bookmarks:changed'); } return { ok: true }; });
+  handle('bookmarks:set-folder', (_e, url: string, folder: string) => {
+    if (isStr(url) && isStr(folder, 100)) { setBookmarkFolder(url, folder); broadcast('bookmarks:changed'); }
+    return { ok: true };
+  });
+  handle('bookmarks:import', async (event) => {
+    const win = (ctxFromSender(event.sender) ?? focusedCtx())?.win;
+    const openOpts: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: 'Bookmarks (HTML)', extensions: ['html', 'htm'] }] };
+    const pick = win ? await dialog.showOpenDialog(win, openOpts) : await dialog.showOpenDialog(openOpts);
+    const file = pick.filePaths[0];
+    if (pick.canceled || !file) return { ok: false, canceled: true };
+    if ((await fs.stat(file)).size > MAX_IMPORT_BYTES) return { ok: false, error: 'too-large' };
+    const items = parseNetscapeHtml(await fs.readFile(file, 'utf8'));
+    const added = importBookmarks(items);
+    broadcast('bookmarks:changed');
+    return { ok: true, total: items.length, added };
+  });
+  handle('bookmarks:export', async (event) => {
+    const win = (ctxFromSender(event.sender) ?? focusedCtx())?.win;
+    const saveOpts: Electron.SaveDialogOptions = { defaultPath: 'tekeli-bookmarks.html', filters: [{ name: 'Bookmarks (HTML)', extensions: ['html'] }] };
+    const save = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts);
+    if (save.canceled || !save.filePath) return { ok: false, canceled: true };
+    const items = getBookmarks({ limit: 2000 });
+    await fs.writeFile(save.filePath, toNetscapeHtml(items), 'utf8');
+    return { ok: true, total: items.length };
+  });
 
   handle('history:list', (_e, search?: string) => ({ items: getHistory({ search: isStr(search, 200) ? search : '' }) }));
   handle('history:delete', (_e, url: string) => { if (isStr(url)) { deleteHistoryEntry(url); broadcast('history:changed'); } return { ok: true }; });

@@ -76,6 +76,9 @@ export async function initDatabase(file: string = getDbPath()): Promise<boolean>
     const opened = new DatabaseSync(file);
     opened.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;');
     opened.exec(SCHEMA);
+    // bookmarks.folder arrived after the first release: add it to databases created before.
+    const cols = opened.prepare('PRAGMA table_info(bookmarks)').all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'folder')) opened.exec("ALTER TABLE bookmarks ADD COLUMN folder TEXT NOT NULL DEFAULT ''");
     db = opened;
     return true;
   } catch (error) {

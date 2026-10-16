@@ -9,7 +9,7 @@ if (location.protocol === 'tekeli:') {
   const INVOKE = new Set([
     'settings:get', 'settings:set',
     'tabs:state', 'tabs:do', 'find:do',
-    'bookmarks:is', 'bookmarks:toggle', 'bookmarks:list', 'bookmarks:add', 'bookmarks:remove',
+    'bookmarks:is', 'bookmarks:toggle', 'bookmarks:list', 'bookmarks:add', 'bookmarks:remove', 'bookmarks:set-folder', 'bookmarks:import', 'bookmarks:export',
     'history:list', 'history:delete', 'history:clear',
     'omnibox:suggest',
     'app:copy', 'app:openExternal', 'app:info',

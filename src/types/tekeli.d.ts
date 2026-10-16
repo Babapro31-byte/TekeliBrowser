@@ -39,7 +39,7 @@ export interface SettingsPayload {
 }
 
 export interface HistoryItem { url: string; title: string; timestamp: number; visitCount: number }
-export interface BookmarkItem { id: number; url: string; title: string; createdAt: number }
+export interface BookmarkItem { id: number; url: string; title: string; createdAt: number; folder: string }
 export interface FindResult { activeMatchOrdinal: number; matches: number }
 
 export interface TekeliBridge {
