@@ -1,0 +1,52 @@
+@import '@fontsource-variable/inter';
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    background: rgb(var(--c-app));
+    color: rgb(var(--c-fg));
+    font-family: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  /* The chrome (tab strip + toolbar) is not selectable text. */
+  .chrome-root { user-select: none; -webkit-user-select: none; }
+  button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+  button:disabled { cursor: default; }
+  input, select { font: inherit; color: inherit; }
+  ::selection { background: rgb(var(--c-accent) / 0.35); }
+
+  /* Visible keyboard focus everywhere (never removed without replacement). */
+  :focus-visible { outline: 2px solid rgb(var(--c-ring)); outline-offset: 2px; border-radius: 6px; }
+  input:focus-visible { outline: none; }
+
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--c-line)); border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-line-strong)); background-clip: content-box; border: 3px solid transparent; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+@layer utilities {
+  .drag { -webkit-app-region: drag; }
+  .no-drag { -webkit-app-region: no-drag; }
+}
+
+/* Reduced motion: respect the OS and the in-app switch. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+:root[data-motion='reduced'] *, :root[data-motion='reduced'] *::before, :root[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+
+@keyframes tekeli-spin { to { transform: rotate(360deg); } }
+.spin { animation: tekeli-spin 0.9s linear infinite; }
