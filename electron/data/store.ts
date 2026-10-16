@@ -116,8 +116,9 @@ export function recordSearchQuery(query: string): void {
   );
 }
 
-export function clearSearchQueries(): void {
-  dbRun('DELETE FROM search_queries');
+export function clearSearchQueries(sinceMs?: number): void {
+  if (typeof sinceMs === 'number' && Number.isFinite(sinceMs)) dbRun('DELETE FROM search_queries WHERE last_used >= ?', [sinceMs]);
+  else dbRun('DELETE FROM search_queries');
 }
 
 export function getSuggestions(input: string, limit = 8): Suggestion[] {

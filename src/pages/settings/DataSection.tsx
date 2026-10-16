@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke, useT } from '../../lib/bridge';
-import { Button, Group, IconButton, Row } from '../../lib/ui';
+import { Button, Group, IconButton, Row, Select } from '../../lib/ui';
 import type { MessageKey } from '../../../shared/i18n';
 
 interface Perm { origin: string; permission: string; decision: 'allow' | 'block' }
@@ -9,8 +9,13 @@ const LABELS: Record<string, MessageKey> = {
   media: 'perm.label.media', geolocation: 'perm.label.geolocation', notifications: 'perm.label.notifications', 'clipboard-read': 'perm.label.clipboard',
 };
 
+const HOUR = 3_600_000;
+const RANGES = { hour: HOUR, day: 24 * HOUR, week: 7 * 24 * HOUR, month: 28 * 24 * HOUR, all: 0 } as const;
+type Range = keyof typeof RANGES;
+
 function ClearDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const t = useT();
+  const [range, setRange] = useState<Range>('all');
   const [opts, setOpts] = useState({ history: true, cookiesAndSiteData: true, cache: true, passwords: false, sitePermissions: false });
   const [busy, setBusy] = useState(false);
   const first = useRef<HTMLInputElement>(null);
@@ -29,12 +34,20 @@ function ClearDialog({ onClose, onDone }: { onClose: () => void; onDone: () => v
     { key: 'sitePermissions', label: 'clear.permissions' },
   ];
   const any = Object.values(opts).some(Boolean);
-  const run = async () => { setBusy(true); await invoke('data:clear', opts); setBusy(false); onDone(); onClose(); };
+  const run = async () => {
+    setBusy(true);
+    await invoke('data:clear', { ...opts, since: range === 'all' ? undefined : Date.now() - RANGES[range] });
+    setBusy(false); onDone(); onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 px-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-labelledby="clear-title" className="flex w-full max-w-[460px] flex-col gap-4 rounded-xl border border-line-subtle bg-raised p-6 shadow-dialog">
         <h2 id="clear-title" className="m-0 text-title font-semibold text-fg">{t('privacy.clearData')}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-body text-fg-2">{t('clear.range')}</span>
+          <Select value={range} onChange={setRange} label={t('clear.range')} width={180} options={(Object.keys(RANGES) as Range[]).map((k) => ({ value: k, label: t(`clear.range.${k}` as MessageKey) }))} />
+        </div>
         <div className="flex flex-col gap-1">
           {items.map((it, i) => (
             <label key={it.key} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-body text-fg hover:bg-hover">
