@@ -47,6 +47,46 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
   }
 }
 
+// ---- autofill: report a visible password field; fill only when main sends credentials after the user clicked "Fill" ----
+if (process.isMainFrame && (location.protocol === 'https:' || location.protocol === 'http:')) {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+  };
+  const findFields = () => {
+    const pw = Array.from(document.querySelectorAll('input[type="password"]')).find(visible);
+    if (!pw) return null;
+    // The username field is the closest visible text-like input before the password field.
+    let user = null;
+    for (const c of (pw.form || document).querySelectorAll('input')) {
+      const type = (c.getAttribute('type') || 'text').toLowerCase();
+      if (c !== pw && (type === 'text' || type === 'email' || type === 'tel') && visible(c) && (c.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING)) user = c;
+    }
+    return { pw, user };
+  };
+  const setValue = (el, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  let announced = '';
+  const announce = () => {
+    if (announced === location.href || !findFields()) return;
+    announced = location.href;
+    ipcRenderer.send('password:field-seen');
+  };
+  document.addEventListener('DOMContentLoaded', announce);
+  document.addEventListener('focusin', (e) => { if (e.target && e.target.type === 'password') announce(); }, true);
+  ipcRenderer.on('password:fill', (_event, cred) => {
+    try {
+      const f = findFields();
+      if (!f || !cred || typeof cred.password !== 'string') return;
+      if (f.user && typeof cred.username === 'string') setValue(f.user, cred.username);
+      setValue(f.pw, cred.password);
+    } catch (e) { /* never interfere with the page */ }
+  });
+}
+
 // ---- login form capture (the user is asked in the window chrome before anything is saved) ----
 if (location.protocol === 'https:' || location.protocol === 'http:') {
   document.addEventListener('submit', (event) => {

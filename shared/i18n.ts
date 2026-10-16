@@ -249,6 +249,8 @@ const en = {
   'pwsave.title': 'Save password for %s?',
   'pwsave.update': 'Update saved password for %s?',
   'pwsave.updateBtn': 'Update',
+  'pwfill.title': 'Saved login for %s',
+  'pwfill.fill': 'Fill',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -500,6 +502,8 @@ const tr: Record<MessageKey, string> = {
   'pwsave.title': '%s için şifre kaydedilsin mi?',
   'pwsave.update': '%s için kayıtlı şifre güncellensin mi?',
   'pwsave.updateBtn': 'Güncelle',
+  'pwfill.title': '%s için kayıtlı giriş var',
+  'pwfill.fill': 'Doldur',
 };
 
 const dictionaries: Record<Lang, Record<MessageKey, string>> = { en, tr };

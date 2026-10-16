@@ -15,7 +15,7 @@ if (location.protocol === 'tekeli:') {
     'app:copy', 'app:openExternal', 'app:info',
     'downloads:list', 'downloads:do',
     'overlay:show', 'overlay:update', 'overlay:hide', 'overlay:pick',
-    'password:respond', 'password:pending',
+    'password:respond', 'password:pending', 'password:fill', 'password:fill-dismiss',
     'update:state', 'update:check', 'update:download', 'update:install',
     'data:clear',
     'password-available', 'password-list', 'password-add', 'password-reveal', 'password-delete', 'password-check-breach',

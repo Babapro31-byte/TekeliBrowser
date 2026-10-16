@@ -11,6 +11,7 @@ import { matchShortcut, type ShortcutAction } from './shortcuts';
 import { TabManager, type SessionTab, type TabsState } from './tabs';
 import { configureSession } from './sessions';
 import { onBlockedChanged } from '../privacy/adblock';
+import { refreshFillOffer } from '../privacy/passwordPrompt';
 
 export interface WindowCtx {
   win: BrowserWindow;
@@ -165,6 +166,7 @@ export function createWindow(opts: { isPrivate?: boolean } = {}): WindowCtx {
     lang: currentLang,
     onState: (state: TabsState) => {
       if (!win.isDestroyed()) win.webContents.send('tabs:state', state);
+      refreshFillOffer(ctx);
       writeSession(ctx);
     },
     onAction: (action, tabId) => runAction(ctx, action, tabId),
