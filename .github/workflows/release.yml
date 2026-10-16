@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v4.0.1 (must match package.json "version").
+# Push a tag like v1.0.1 (must match package.json "version").
 # Assets (installer, .blockmap, latest.yml) are uploaded to a DRAFT release first and the release is
 # published only after every asset is there, so auto-update never sees latest.yml without the installer.
 on:
